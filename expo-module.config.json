@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoWorkoutkitModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.workoutkit.ExpoWorkoutkitModule"]
+  }
+}

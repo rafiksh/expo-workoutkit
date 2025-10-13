@@ -139,11 +139,8 @@ export type WorkoutPlan =
   | { type: "pacer"; workout: PacerWorkout }
   | { type: "custom"; workout: CustomWorkout };
 
-// Props for the React Native view
-export type WorkoutData = WorkoutPlan;
-
 export type PreviewWorkoutButtonProps = {
-  workoutData?: WorkoutData;
+  workoutPlan?: WorkoutPlan;
   label?: string;
   onButtonPress?: (event: { nativeEvent: OnButtonPressEventPayload }) => void;
   style?: StyleProp<ViewStyle>;

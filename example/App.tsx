@@ -23,7 +23,7 @@ export default function App() {
               30-minute running goal
             </Text>
             <PreviewWorkoutButton
-              workoutData={{
+              workoutPlan={{
                 type: "goal",
                 workout: {
                   activity: "running",

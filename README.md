@@ -33,7 +33,7 @@ import { PreviewWorkoutButton } from 'expo-workoutkit';
 export default function App() {
   return (
     <PreviewWorkoutButton
-      workoutData={{
+      workoutPlan={{
         type: "goal",
         workout: {
           activity: "running",
@@ -210,7 +210,7 @@ goal: {
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `workoutData` | `WorkoutData` | The workout configuration |
+| `workoutPlan` | `WorkoutPlan` | The workout configuration |
 | `label` | `string` | Custom button text |
 | `onButtonPress` | `(event: { nativeEvent: OnButtonPressEventPayload }) => void` | Callback when workout button is pressed |
 | `style` | `StyleProp<ViewStyle>` | Custom styles for the view |
@@ -221,7 +221,7 @@ The module provides comprehensive TypeScript definitions:
 
 ```tsx
 import type { 
-  WorkoutData, 
+  WorkoutPlan, 
   HKWorkoutActivityType, 
   WorkoutGoal,
   PreviewWorkoutButtonProps 

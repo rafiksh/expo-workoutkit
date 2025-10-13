@@ -16,7 +16,7 @@ public class ExpoWorkoutkitModule: Module {
     // Enables the module to be used as a native view. Definition components that are accepted as part of the
     // view definition: Prop, Events.
     View(ExpoWorkoutkitView.self) {
-      Prop("workoutData") { (view: ExpoWorkoutkitView, data: [String: Any]?) in
+      Prop("workoutPlan") { (view: ExpoWorkoutkitView, data: [String: Any]?) in
         if #available(iOS 17.0, *) {
           if let data = data {
             let workoutPlan = createWorkoutPlan(from: data)

@@ -1,4 +1,4 @@
-import { ExpoWorkoutkitView } from "expo-workoutkit";
+import { PreviewWorkoutButton } from "expo-workoutkit";
 import { ScrollView, Text, View, Alert } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 export default function App() {
@@ -22,7 +22,7 @@ export default function App() {
             <Text style={styles.sectionDescription}>
               30-minute running goal
             </Text>
-            <ExpoWorkoutkitView
+            <PreviewWorkoutButton
               workoutData={{
                 type: "goal",
                 workout: {
@@ -49,7 +49,7 @@ export default function App() {
               <Text style={styles.sectionTitle}>Pacer Workout</Text>
             </View>
             <Text style={styles.sectionDescription}>5km in 30 minutes</Text>
-            <ExpoWorkoutkitView
+            <PreviewWorkoutButton
               workoutData={{
                 type: "pacer",
                 workout: {
@@ -81,7 +81,7 @@ export default function App() {
             <Text style={styles.sectionDescription}>
               Advanced interval training
             </Text>
-            <ExpoWorkoutkitView
+            <PreviewWorkoutButton
               workoutData={{
                 type: "custom",
                 workout: {

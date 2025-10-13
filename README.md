@@ -28,11 +28,11 @@ npm install expo-workoutkit
 ### Basic Usage
 
 ```tsx
-import { ExpoWorkoutkitView } from 'expo-workoutkit';
+import { PreviewWorkoutButton } from 'expo-workoutkit';
 
 export default function App() {
   return (
-    <ExpoWorkoutkitView
+    <PreviewWorkoutButton
       workoutData={{
         type: "goal",
         workout: {
@@ -206,11 +206,12 @@ goal: {
 
 ## Props
 
-### ExpoWorkoutkitViewProps
+### PreviewWorkoutButtonProps
 
 | Prop | Type | Description |
 |------|------|-------------|
 | `workoutData` | `WorkoutData` | The workout configuration |
+| `label` | `string` | Custom button text |
 | `onButtonPress` | `(event: { nativeEvent: OnButtonPressEventPayload }) => void` | Callback when workout button is pressed |
 | `style` | `StyleProp<ViewStyle>` | Custom styles for the view |
 
@@ -223,7 +224,7 @@ import type {
   WorkoutData, 
   HKWorkoutActivityType, 
   WorkoutGoal,
-  ExpoWorkoutkitViewProps 
+  PreviewWorkoutButtonProps 
 } from 'expo-workoutkit';
 ```
 

@@ -1,12 +1,8 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { NativeModule, requireNativeModule } from "expo";
 
-import { ExpoWorkoutkitModuleEvents } from './ExpoWorkoutkit.types';
-
-declare class ExpoWorkoutkitModule extends NativeModule<ExpoWorkoutkitModuleEvents> {
-  PI: number;
-  hello(): string;
-  setValueAsync(value: string): Promise<void>;
+declare class ExpoWorkoutkitModule extends NativeModule {
+  // Module is primarily used for the view component
 }
 
 // This call loads the native module object from the JSI.
-export default requireNativeModule<ExpoWorkoutkitModule>('ExpoWorkoutkit');
+export default requireNativeModule<ExpoWorkoutkitModule>("ExpoWorkoutkit");

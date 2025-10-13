@@ -144,6 +144,7 @@ export type WorkoutData = WorkoutPlan;
 
 export type ExpoWorkoutkitViewProps = {
   workoutData?: WorkoutData;
+  label?: string;
   onButtonPress?: (event: { nativeEvent: OnButtonPressEventPayload }) => void;
   style?: StyleProp<ViewStyle>;
 };

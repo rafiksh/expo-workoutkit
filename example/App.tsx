@@ -35,6 +35,7 @@ export default function App() {
                   },
                 },
               }}
+              label="🎯 Start Goal Workout"
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Goal Workout", message)
               }
@@ -64,6 +65,7 @@ export default function App() {
                   },
                 },
               }}
+              label="⚡ Start Pacer Workout"
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Pacer Workout", message)
               }
@@ -129,6 +131,7 @@ export default function App() {
                   },
                 },
               }}
+              label="🔥 Start Custom Workout"
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Custom Workout", message)
               }

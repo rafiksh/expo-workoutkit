@@ -9,15 +9,17 @@ struct WorkoutButtonView: View {
   @State private var showWorkoutPreview = false
   let onButtonPress: () -> Void
   let workoutPlan: WorkoutPlan
+  let label: String
   
-  init(workoutPlan: WorkoutPlan, onButtonPress: @escaping () -> Void) {
+  init(workoutPlan: WorkoutPlan, label: String, onButtonPress: @escaping () -> Void) {
     self.workoutPlan = workoutPlan
+    self.label = label
     self.onButtonPress = onButtonPress
   }
   
   
   var body: some View {
-    Button("Show Workout Preview") {
+    Button(label) {
       showWorkoutPreview.toggle()
       onButtonPress()
     }
@@ -33,6 +35,7 @@ class ExpoWorkoutkitView: ExpoView {
   private var hostingController: UIHostingController<AnyView>?
   
   private var workoutPlan: Any?
+  private var label: String = "Start Workout"
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -44,7 +47,7 @@ class ExpoWorkoutkitView: ExpoView {
     if #available(iOS 17.0, *) {
       // Create the SwiftUI view with WorkoutKit support
       let plan = (workoutPlan as? WorkoutPlan) ?? createDefaultWorkoutPlan()
-      let swiftUIView = WorkoutButtonView(workoutPlan: plan) {
+      let swiftUIView = WorkoutButtonView(workoutPlan: plan, label: label) {
         self.onButtonPress(["message": "Workout preview triggered!"])
       }
       
@@ -52,9 +55,9 @@ class ExpoWorkoutkitView: ExpoView {
       hostingController = UIHostingController(rootView: AnyView(swiftUIView))
     } else {
       // Fallback for older iOS versions
-      let fallbackView = FallbackButtonView {
+      let fallbackView = FallbackButtonView(onButtonPress: {
         self.onButtonPress(["message": "WorkoutKit requires iOS 17.0+"])
-      }
+      }, label: label)
       
       hostingController = UIHostingController(rootView: AnyView(fallbackView))
     }
@@ -70,6 +73,13 @@ class ExpoWorkoutkitView: ExpoView {
   func setWorkoutPlan(_ plan: WorkoutPlan?) {
     self.workoutPlan = plan
     // Recreate the view with new data
+    hostingController?.view.removeFromSuperview()
+    setupView()
+  }
+  
+  func setLabel(_ text: String) {
+    self.label = text
+    // Recreate the view with new label
     hostingController?.view.removeFromSuperview()
     setupView()
   }
@@ -93,9 +103,15 @@ class ExpoWorkoutkitView: ExpoView {
 // Fallback view for older iOS versions
 struct FallbackButtonView: View {
   let onButtonPress: () -> Void
+  let label: String
+  
+  init(onButtonPress: @escaping () -> Void, label: String) {
+    self.onButtonPress = onButtonPress
+    self.label = label
+  }
   
   var body: some View {
-    Button("WorkoutKit requires iOS 17.0+") {
+    Button(label) {
       onButtonPress()
     }
     .buttonStyle(.borderedProminent)

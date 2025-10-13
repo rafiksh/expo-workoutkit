@@ -28,6 +28,12 @@ public class ExpoWorkoutkitModule: Module {
         // For iOS < 17.0, the view will show the fallback message
       }
       
+      Prop("label") { (view: ExpoWorkoutkitView, label: String?) in
+        if let label = label {
+          view.setLabel(label)
+        }
+      }
+      
       Events("onButtonPress")
     }
   }

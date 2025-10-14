@@ -1,24 +1,26 @@
 import { PreviewWorkoutButton } from "expo-workoutkit";
 import { ScrollView, Text, View, Alert } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+
 export default function App() {
   const handleWorkoutPress = (workoutType: string, message: string) => {
-    Alert.alert("Workout Selected! 🏃‍♂️", `${workoutType}: ${message}`);
+    Alert.alert("Workout Started", `${workoutType}: ${message}`);
   };
 
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>🏃‍♂️ Expo WorkoutKit</Text>
-          <Text style={styles.subtitle}>iOS WorkoutKit Integration Demo</Text>
+          <Text style={styles.title}>Expo WorkoutKit</Text>
+          <Text style={styles.subtitle}>iOS WorkoutKit Integration</Text>
         </View>
-        <ScrollView style={styles.scrollView}>
-          <View style={[styles.section, styles.goalSection]}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>🎯</Text>
-              <Text style={styles.sectionTitle}>Goal Workout</Text>
-            </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+        >
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Goal Workout</Text>
             <Text style={styles.sectionDescription}>
               30-minute running goal
             </Text>
@@ -35,23 +37,20 @@ export default function App() {
                   },
                 },
               }}
-              label="🎯 Start Goal Workout"
-              buttonColor="#10b981"
+              label="Start Goal Workout"
+              buttonColor="#007AFF"
               textColor="#ffffff"
-              cornerRadius={12}
-              fontSize={18}
+              cornerRadius={8}
+              fontSize={16}
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Goal Workout", message)
               }
-              style={styles.workoutView}
+              style={styles.workoutButton}
             />
           </View>
 
-          <View style={[styles.section, styles.pacerSection]}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>⚡</Text>
-              <Text style={styles.sectionTitle}>Pacer Workout</Text>
-            </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Pacer Workout</Text>
             <Text style={styles.sectionDescription}>5km in 30 minutes</Text>
             <PreviewWorkoutButton
               workoutPlan={{
@@ -69,23 +68,20 @@ export default function App() {
                   },
                 },
               }}
-              label="⚡ Start Pacer Workout"
-              buttonColor="#f97316"
+              label="Start Pacer Workout"
+              buttonColor="#34C759"
               textColor="#ffffff"
-              cornerRadius={16}
-              fontSize={18}
+              cornerRadius={8}
+              fontSize={16}
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Pacer Workout", message)
               }
-              style={styles.workoutView}
+              style={styles.workoutButton}
             />
           </View>
 
-          <View style={[styles.section, styles.customSection]}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>🔥</Text>
-              <Text style={styles.sectionTitle}>Custom Workout</Text>
-            </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Custom Workout</Text>
             <Text style={styles.sectionDescription}>
               Advanced interval training
             </Text>
@@ -139,15 +135,15 @@ export default function App() {
                   },
                 },
               }}
-              label="🔥 Start Custom Workout"
-              buttonColor="#ec4899"
+              label="Start Custom Workout"
+              buttonColor="#FF9500"
               textColor="#ffffff"
-              cornerRadius={20}
-              fontSize={18}
+              cornerRadius={8}
+              fontSize={16}
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Custom Workout", message)
               }
-              style={styles.workoutView}
+              style={styles.workoutButton}
             />
           </View>
         </ScrollView>
@@ -159,75 +155,51 @@ export default function App() {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: "#1f2937",
+    backgroundColor: "#f5f5f7",
   },
   scrollView: {
     flex: 1,
-    backgroundColor: "#fff",
+  },
+  content: {
+    padding: 20,
   },
   header: {
-    padding: 30,
-    paddingTop: 20,
+    padding: 24,
     alignItems: "center" as const,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e5e7",
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold" as const,
-    color: "#fff",
-    marginBottom: 8,
+    fontSize: 28,
+    fontWeight: "600" as const,
+    color: "#1d1d1f",
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: "rgba(255, 255, 255, 0.9)",
-    textAlign: "center" as const,
+    color: "#86868b",
   },
   section: {
-    margin: 20,
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  goalSection: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#06b6d4",
-    backgroundColor: "#f0f9ff",
-  },
-  pacerSection: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#f97316",
-    backgroundColor: "#fff7ed",
-  },
-  customSection: {
-    borderLeftWidth: 4,
-    borderLeftColor: "#ec4899",
-    backgroundColor: "#fdf2f8",
-  },
-  sectionHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginBottom: 8,
-  },
-  sectionIcon: {
-    fontSize: 24,
-    marginRight: 12,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e5e5e7",
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: "bold" as const,
-    color: "#1f2937",
+    fontSize: 20,
+    fontWeight: "600" as const,
+    color: "#1d1d1f",
+    marginBottom: 4,
   },
   sectionDescription: {
-    fontSize: 16,
-    color: "#6b7280",
-    marginBottom: 20,
-    marginLeft: 36,
+    fontSize: 15,
+    color: "#86868b",
+    marginBottom: 16,
   },
-  workoutView: {
-    height: 50,
+  workoutButton: {
+    height: 48,
   },
 };

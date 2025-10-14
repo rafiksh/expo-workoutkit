@@ -240,26 +240,13 @@ npx expo start
 
 ## Requirements
 
-- iOS 14.0+
+- iOS 17.0+ (WorkoutKit framework requirement)
 - React Native 0.60+
 - Expo SDK 50+
 
 ## Permissions
 
-The module requires HealthKit permissions. Make sure to add the following to your `app.json`:
-
-```json
-{
-  "expo": {
-    "ios": {
-      "infoPlist": {
-        "NSHealthShareUsageDescription": "This app uses HealthKit to track your workouts.",
-        "NSHealthUpdateUsageDescription": "This app uses HealthKit to save your workout data."
-      }
-    }
-  }
-}
-```
+No additional permissions are required! The WorkoutKit framework handles all HealthKit permissions internally when users interact with the workout preview.
 
 ## Contributing
 

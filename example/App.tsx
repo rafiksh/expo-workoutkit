@@ -36,6 +36,10 @@ export default function App() {
                 },
               }}
               label="🎯 Start Goal Workout"
+              buttonColor="#10b981"
+              textColor="#ffffff"
+              cornerRadius={12}
+              fontSize={18}
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Goal Workout", message)
               }
@@ -50,7 +54,7 @@ export default function App() {
             </View>
             <Text style={styles.sectionDescription}>5km in 30 minutes</Text>
             <PreviewWorkoutButton
-              workoutData={{
+              workoutPlan={{
                 type: "pacer",
                 workout: {
                   activity: "running",
@@ -66,6 +70,10 @@ export default function App() {
                 },
               }}
               label="⚡ Start Pacer Workout"
+              buttonColor="#f97316"
+              textColor="#ffffff"
+              cornerRadius={16}
+              fontSize={18}
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Pacer Workout", message)
               }
@@ -82,7 +90,7 @@ export default function App() {
               Advanced interval training
             </Text>
             <PreviewWorkoutButton
-              workoutData={{
+              workoutPlan={{
                 type: "custom",
                 workout: {
                   activity: "running",
@@ -132,6 +140,10 @@ export default function App() {
                 },
               }}
               label="🔥 Start Custom Workout"
+              buttonColor="#ec4899"
+              textColor="#ffffff"
+              cornerRadius={20}
+              fontSize={18}
               onButtonPress={({ nativeEvent: { message } }) =>
                 handleWorkoutPress("Custom Workout", message)
               }

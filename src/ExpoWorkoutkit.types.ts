@@ -142,6 +142,10 @@ export type WorkoutPlan =
 export type PreviewWorkoutButtonProps = {
   workoutPlan?: WorkoutPlan;
   label?: string;
+  buttonColor?: string;
+  textColor?: string;
+  cornerRadius?: number;
+  fontSize?: number;
   onButtonPress?: (event: { nativeEvent: OnButtonPressEventPayload }) => void;
   style?: StyleProp<ViewStyle>;
 };

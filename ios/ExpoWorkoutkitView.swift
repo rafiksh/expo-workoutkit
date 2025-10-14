@@ -10,10 +10,18 @@ struct WorkoutButtonView: View {
   let onButtonPress: () -> Void
   let workoutPlan: WorkoutPlan
   let label: String
+  let buttonColor: Color
+  let textColor: Color
+  let cornerRadius: CGFloat
+  let fontSize: CGFloat
   
-  init(workoutPlan: WorkoutPlan, label: String, onButtonPress: @escaping () -> Void) {
+  init(workoutPlan: WorkoutPlan, label: String, buttonColor: Color = .blue, textColor: Color = .white, cornerRadius: CGFloat = 8, fontSize: CGFloat = 16, onButtonPress: @escaping () -> Void) {
     self.workoutPlan = workoutPlan
     self.label = label
+    self.buttonColor = buttonColor
+    self.textColor = textColor
+    self.cornerRadius = cornerRadius
+    self.fontSize = fontSize
     self.onButtonPress = onButtonPress
   }
   
@@ -24,7 +32,12 @@ struct WorkoutButtonView: View {
       onButtonPress()
     }
     .workoutPreview(workoutPlan, isPresented: $showWorkoutPreview)
-    .buttonStyle(.borderedProminent)
+    .foregroundColor(textColor)
+    .font(.system(size: fontSize, weight: .semibold))
+    .padding(.horizontal, 20)
+    .padding(.vertical, 12)
+    .background(buttonColor)
+    .cornerRadius(cornerRadius)
   }
 }
 
@@ -36,6 +49,10 @@ class ExpoWorkoutkitView: ExpoView {
   
   private var workoutPlan: Any?
   private var label: String = "Start Workout"
+  private var buttonColor: Color = .blue
+  private var textColor: Color = .white
+  private var cornerRadius: CGFloat = 8
+  private var fontSize: CGFloat = 16
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -47,7 +64,14 @@ class ExpoWorkoutkitView: ExpoView {
     if #available(iOS 17.0, *) {
       // Create the SwiftUI view with WorkoutKit support
       let plan = (workoutPlan as? WorkoutPlan) ?? createDefaultWorkoutPlan()
-      let swiftUIView = WorkoutButtonView(workoutPlan: plan, label: label) {
+      let swiftUIView = WorkoutButtonView(
+        workoutPlan: plan, 
+        label: label, 
+        buttonColor: buttonColor, 
+        textColor: textColor, 
+        cornerRadius: cornerRadius, 
+        fontSize: fontSize
+      ) {
         self.onButtonPress(["message": "Workout preview triggered!"])
       }
       
@@ -55,9 +79,16 @@ class ExpoWorkoutkitView: ExpoView {
       hostingController = UIHostingController(rootView: AnyView(swiftUIView))
     } else {
       // Fallback for older iOS versions
-      let fallbackView = FallbackButtonView(onButtonPress: {
-        self.onButtonPress(["message": "WorkoutKit requires iOS 17.0+"])
-      }, label: label)
+      let fallbackView = FallbackButtonView(
+        onButtonPress: {
+          self.onButtonPress(["message": "WorkoutKit requires iOS 17.0+"])
+        }, 
+        label: label,
+        buttonColor: buttonColor,
+        textColor: textColor,
+        cornerRadius: cornerRadius,
+        fontSize: fontSize
+      )
       
       hostingController = UIHostingController(rootView: AnyView(fallbackView))
     }
@@ -84,6 +115,30 @@ class ExpoWorkoutkitView: ExpoView {
     setupView()
   }
   
+  func setButtonColor(_ color: Color) {
+    self.buttonColor = color
+    hostingController?.view.removeFromSuperview()
+    setupView()
+  }
+  
+  func setTextColor(_ color: Color) {
+    self.textColor = color
+    hostingController?.view.removeFromSuperview()
+    setupView()
+  }
+  
+  func setCornerRadius(_ radius: CGFloat) {
+    self.cornerRadius = radius
+    hostingController?.view.removeFromSuperview()
+    setupView()
+  }
+  
+  func setFontSize(_ size: CGFloat) {
+    self.fontSize = size
+    hostingController?.view.removeFromSuperview()
+    setupView()
+  }
+  
   @available(iOS 17.0, *)
   private func createDefaultWorkoutPlan() -> WorkoutPlan {
     let basicWorkout = SingleGoalWorkout(
@@ -104,16 +159,29 @@ class ExpoWorkoutkitView: ExpoView {
 struct FallbackButtonView: View {
   let onButtonPress: () -> Void
   let label: String
+  let buttonColor: Color
+  let textColor: Color
+  let cornerRadius: CGFloat
+  let fontSize: CGFloat
   
-  init(onButtonPress: @escaping () -> Void, label: String) {
+  init(onButtonPress: @escaping () -> Void, label: String, buttonColor: Color = .blue, textColor: Color = .white, cornerRadius: CGFloat = 8, fontSize: CGFloat = 16) {
     self.onButtonPress = onButtonPress
     self.label = label
+    self.buttonColor = buttonColor
+    self.textColor = textColor
+    self.cornerRadius = cornerRadius
+    self.fontSize = fontSize
   }
   
   var body: some View {
     Button(label) {
       onButtonPress()
     }
-    .buttonStyle(.borderedProminent)
+    .foregroundColor(textColor)
+    .font(.system(size: fontSize, weight: .semibold))
+    .padding(.horizontal, 20)
+    .padding(.vertical, 12)
+    .background(buttonColor)
+    .cornerRadius(cornerRadius)
   }
 }

@@ -1,17 +1,6 @@
-import {
-  ConfigPlugin,
-  withInfoPlist,
-  withXcodeProject,
-} from "@expo/config-plugins";
+const { withInfoPlist, withXcodeProject } = require("@expo/config-plugins");
 
-interface ExpoWorkoutkitPluginOptions {
-  forceIOS17?: boolean;
-}
-
-const withExpoWorkoutkit: ConfigPlugin<ExpoWorkoutkitPluginOptions> = (
-  config,
-  options = {}
-) => {
+const withExpoWorkoutkit = (config, options = {}) => {
   // Optional: Allow apps to force iOS 17.0+ if they want full WorkoutKit support
   // If not specified, the module will use runtime guards for iOS 15+ compatibility
   if (options.forceIOS17) {
@@ -32,4 +21,4 @@ const withExpoWorkoutkit: ConfigPlugin<ExpoWorkoutkitPluginOptions> = (
   return config;
 };
 
-export default withExpoWorkoutkit;
+module.exports = withExpoWorkoutkit;

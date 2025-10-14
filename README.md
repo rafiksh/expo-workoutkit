@@ -14,7 +14,7 @@ A React Native module that provides seamless integration with iOS WorkoutKit, en
 ## Installation
 
 ```bash
-npm install expo-workoutkit
+npm install https://github.com/rafiksh/expo-workoutkit
 ```
 
 ## Platform Support

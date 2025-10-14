@@ -4,6 +4,18 @@
   "description": "Expo workoutkit native module",
   "main": "build/index.js",
   "types": "build/index.d.ts",
+  "expo": {
+    "name": "expo-workoutkit",
+    "slug": "expo-workoutkit",
+    "version": "0.1.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "ios": {
+      "deploymentTarget": "15.0"
+    }
+  },
   "scripts": {
     "build": "expo-module build",
     "clean": "expo-module clean",

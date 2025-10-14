@@ -7,7 +7,6 @@ A React Native module that provides seamless integration with iOS WorkoutKit, en
 - 🏃‍♂️ **Goal Workouts** - Set time, distance, or energy-based workout goals
 - ⚡ **Pacer Workouts** - Maintain consistent pace with distance and time targets
 - 🔥 **Custom Workouts** - Create complex interval training with warmup, work blocks, and cooldown
-- 📊 **Real-time Data** - Access live workout metrics and progress
 - 🎯 **TypeScript Support** - Full type safety with comprehensive TypeScript definitions
 - 📱 **iOS Native** - Direct integration with iOS WorkoutKit framework
 - ⌚ **Apple Watch Integration** - Send workout plans directly to your Apple Watch for seamless workout tracking

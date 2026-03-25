@@ -1,27 +1,7 @@
-# Expo WorkoutKit
+# Expo WorkoutKit [WIP]
 
-A React Native module that provides seamless integration with iOS WorkoutKit, enabling powerful workout experiences in your Expo and React Native applications.
+A React Native module that provides integration with iOS WorkoutKit, enabling workout experiences in your Expo and React Native applications.
 
-## Features
-
-- 🏃‍♂️ **Goal Workouts** - Set time, distance, or energy-based workout goals
-- ⚡ **Pacer Workouts** - Maintain consistent pace with distance and time targets
-- 🔥 **Custom Workouts** - Create complex interval training with warmup, work blocks, and cooldown
-- 🎯 **TypeScript Support** - Full type safety with comprehensive TypeScript definitions
-- 📱 **iOS Native** - Direct integration with iOS WorkoutKit framework
-- ⌚ **Apple Watch Integration** - Send workout plans directly to your Apple Watch for seamless workout tracking
-
-## Installation
-
-```bash
-npm install https://github.com/rafiksh/expo-workoutkit
-```
-
-## Platform Support
-
-- ✅ **iOS** - Full support with native WorkoutKit integration
-- ❌ **Android** - Not supported (WorkoutKit is iOS-only)
-- ❌ **Web** - Not supported
 
 ## Quick Start
 

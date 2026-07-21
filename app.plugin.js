@@ -1,4 +1,7 @@
-const { withInfoPlist, withXcodeProject } = require("@expo/config-plugins");
+const { withEntitlementsPlist, withInfoPlist, withXcodeProject } = require("@expo/config-plugins");
+
+const DEFAULT_HEALTH_SHARE_USAGE =
+  "This app reads your workouts and health metrics from Apple Health to show them alongside your training plan.";
 
 const withExpoWorkoutkit = (config, options = {}) => {
   // Optional: Allow apps to force iOS 17.0+ if they want full WorkoutKit support
@@ -11,12 +14,20 @@ const withExpoWorkoutkit = (config, options = {}) => {
     });
   }
 
-  // Add any required Info.plist entries if needed
-  config = withInfoPlist(config, (config) => {
-    // WorkoutKit doesn't require specific Info.plist entries
-    // The module handles iOS version checking at runtime
-    return config;
-  });
+  // HealthKit read access, needed by the workout/wellness import functions.
+  // Apps that only use the WorkoutKit export side can opt out with
+  // `healthKit: false`.
+  if (options.healthKit !== false) {
+    config = withEntitlementsPlist(config, (config) => {
+      config.modResults["com.apple.developer.healthkit"] = true;
+      return config;
+    });
+    config = withInfoPlist(config, (config) => {
+      config.modResults.NSHealthShareUsageDescription =
+        options.healthShareUsageDescription ?? DEFAULT_HEALTH_SHARE_USAGE;
+      return config;
+    });
+  }
 
   return config;
 };

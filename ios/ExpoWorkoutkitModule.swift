@@ -40,6 +40,97 @@ public class ExpoWorkoutkitModule: Module {
     // The module will be accessible from `requireNativeModule('ExpoWorkoutkit')` in JavaScript.
     Name("ExpoWorkoutkit")
 
+    // MARK: - HealthKit import (read side, see ExpoHealthKitImport.swift)
+
+    Function("isHealthDataAvailable") { () -> Bool in
+      return HKHealthStore.isHealthDataAvailable()
+    }
+
+    AsyncFunction("requestHealthAuthorization") { (promise: Promise) in
+      guard HKHealthStore.isHealthDataAvailable() else {
+        promise.resolve(false)
+        return
+      }
+      HealthImport.store.requestAuthorization(toShare: nil, read: HealthImport.readTypes) { granted, error in
+        if let error {
+          promise.reject("ERR_HEALTH_AUTH", error.localizedDescription)
+        } else {
+          promise.resolve(granted)
+        }
+      }
+    }
+
+    AsyncFunction("queryWorkouts") { (anchor: String?, limit: Int, promise: Promise) in
+      HealthImport.anchoredQuery(
+        type: HKObjectType.workoutType(),
+        anchor: HealthImport.decodeAnchor(anchor),
+        limit: limit
+      ) { result in
+        switch result {
+        case .failure(let error):
+          promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)
+        case .success(let payload):
+          let workouts = payload.samples
+            .compactMap { $0 as? HKWorkout }
+            .map(HealthImport.serializeWorkout)
+          promise.resolve([
+            "anchor": HealthImport.encodeAnchor(payload.newAnchor) as Any,
+            "samples": workouts,
+          ])
+        }
+      }
+    }
+
+    AsyncFunction("queryQuantitySamples") { (metric: String, anchor: String?, limit: Int, promise: Promise) in
+      guard let (type, unit) = HealthImport.quantityType(for: metric) else {
+        promise.reject("ERR_HEALTH_TYPE", "Unknown metric type: \(metric)")
+        return
+      }
+      HealthImport.anchoredQuery(
+        type: type,
+        anchor: HealthImport.decodeAnchor(anchor),
+        limit: limit
+      ) { result in
+        switch result {
+        case .failure(let error):
+          promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)
+        case .success(let payload):
+          let samples = payload.samples
+            .compactMap { $0 as? HKQuantitySample }
+            .map { HealthImport.serializeQuantitySample($0, unit: unit) }
+          promise.resolve([
+            "anchor": HealthImport.encodeAnchor(payload.newAnchor) as Any,
+            "samples": samples,
+          ])
+        }
+      }
+    }
+
+    AsyncFunction("querySleepSamples") { (anchor: String?, limit: Int, promise: Promise) in
+      guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+        promise.reject("ERR_HEALTH_TYPE", "Sleep analysis type unavailable")
+        return
+      }
+      HealthImport.anchoredQuery(
+        type: sleepType,
+        anchor: HealthImport.decodeAnchor(anchor),
+        limit: limit
+      ) { result in
+        switch result {
+        case .failure(let error):
+          promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)
+        case .success(let payload):
+          let samples = payload.samples
+            .compactMap { $0 as? HKCategorySample }
+            .map(HealthImport.serializeSleepSample)
+          promise.resolve([
+            "anchor": HealthImport.encodeAnchor(payload.newAnchor) as Any,
+            "samples": samples,
+          ])
+        }
+      }
+    }
+
 
     // Enables the module to be used as a native view. Definition components that are accepted as part of the
     // view definition: Prop, Events.

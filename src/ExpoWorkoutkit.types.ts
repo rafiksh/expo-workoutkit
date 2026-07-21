@@ -149,3 +149,53 @@ export type PreviewWorkoutButtonProps = {
   onButtonPress?: (event: { nativeEvent: OnButtonPressEventPayload }) => void;
   style?: StyleProp<ViewStyle>;
 };
+
+// --- HealthKit import (read side) ---
+
+// A completed workout read from HealthKit. Values are pre-converted to
+// canonical units (meters, seconds, kcal, bpm) on the native side.
+export type HealthWorkoutSample = {
+  uuid: string;
+  /** Raw HKWorkoutActivityType value; map to your own sport taxonomy in JS. */
+  activityTypeRaw: number;
+  startDate: string;
+  endDate: string;
+  durationS: number;
+  distanceM?: number;
+  calories?: number;
+  avgHr?: number;
+  maxHr?: number;
+  elevationGainM?: number;
+  sourceName?: string;
+  sourceBundleId?: string;
+};
+
+// Wellness metric ids accepted by queryQuantitySamples, each returned in a
+// fixed canonical unit: hrv → ms, resting_hr → bpm, weight → kg,
+// vo2max → mL/(kg·min).
+export type HealthMetricId = "hrv" | "resting_hr" | "weight" | "vo2max";
+
+export type HealthQuantitySample = {
+  uuid: string;
+  value: number;
+  measuredAt: string;
+  sourceName?: string;
+};
+
+// HKCategoryValueSleepAnalysis raw values: 0 inBed, 1 asleepUnspecified,
+// 2 awake, 3 asleepCore, 4 asleepDeep, 5 asleepREM.
+export type HealthSleepSample = {
+  uuid: string;
+  value: number;
+  startDate: string;
+  endDate: string;
+  sourceName?: string;
+};
+
+// One page of an incremental (anchored) query. Pass `anchor` back into the
+// next call to only receive samples added since; a null input anchor reads
+// from the beginning of history.
+export type HealthAnchoredResult<T> = {
+  anchor: string | null;
+  samples: T[];
+};

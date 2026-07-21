@@ -17,6 +17,8 @@ declare class ExpoWorkoutkitModule extends NativeModule {
     anchor: string | null,
     limit: number,
   ): Promise<HealthAnchoredResult<HealthWorkoutSample>>;
+  /** Recent-first page of workouts for browse UIs; pass the last item's startDate as `before` to page older. */
+  listWorkouts(before: string | null, limit: number): Promise<HealthWorkoutSample[]>;
   queryQuantitySamples(
     metric: HealthMetricId,
     anchor: string | null,

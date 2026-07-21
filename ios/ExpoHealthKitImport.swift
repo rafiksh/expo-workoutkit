@@ -67,6 +67,32 @@ enum HealthImport {
     }
   }
 
+  // Recent-first page of workouts for browse/pick UIs (anchored queries
+  // can't sort). `before` (ISO date) pages older results.
+  static func listWorkouts(
+    before: Date?,
+    limit: Int,
+    completion: @escaping (Result<[HKWorkout], Error>) -> Void
+  ) {
+    let predicate = before.map {
+      HKQuery.predicateForSamples(withStart: nil, end: $0, options: .strictStartDate)
+    }
+    let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+    let query = HKSampleQuery(
+      sampleType: HKObjectType.workoutType(),
+      predicate: predicate,
+      limit: limit,
+      sortDescriptors: [sort]
+    ) { _, samples, error in
+      if let error {
+        completion(.failure(error))
+        return
+      }
+      completion(.success(samples?.compactMap { $0 as? HKWorkout } ?? []))
+    }
+    store.execute(query)
+  }
+
   static func anchoredQuery(
     type: HKSampleType,
     anchor: HKQueryAnchor?,

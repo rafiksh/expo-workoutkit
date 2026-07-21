@@ -81,6 +81,18 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
+    AsyncFunction("listWorkouts") { (beforeISO: String?, limit: Int, promise: Promise) in
+      let before = beforeISO.flatMap { HealthImport.iso.date(from: $0) }
+      HealthImport.listWorkouts(before: before, limit: limit) { result in
+        switch result {
+        case .failure(let error):
+          promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)
+        case .success(let workouts):
+          promise.resolve(workouts.map(HealthImport.serializeWorkout))
+        }
+      }
+    }
+
     AsyncFunction("queryQuantitySamples") { (metric: String, anchor: String?, limit: Int, promise: Promise) in
       guard let (type, unit) = HealthImport.quantityType(for: metric) else {
         promise.reject("ERR_HEALTH_TYPE", "Unknown metric type: \(metric)")

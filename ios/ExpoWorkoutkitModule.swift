@@ -289,38 +289,66 @@ private func createCustomWorkout(from data: [String: Any]?) -> WorkoutPlan {
   return WorkoutPlan(.custom(customWorkout))
 }
 
+// Unit strings mirror the WorkoutGoal/PacerWorkout unions in
+// src/ExpoWorkoutkit.types.ts; every unit the types allow must be mapped
+// here, otherwise the value silently lands in the fallback unit.
+private func parseDurationUnit(_ unit: String?) -> UnitDuration {
+  switch unit {
+  case "seconds": return .seconds
+  case "hours": return .hours
+  default: return .minutes
+  }
+}
+
+private func parseLengthUnit(_ unit: String?) -> UnitLength {
+  switch unit {
+  case "meters": return .meters
+  case "yards": return .yards
+  case "feet": return .feet
+  case "miles": return .miles
+  default: return .kilometers
+  }
+}
+
+private func parseEnergyUnit(_ unit: String?) -> UnitEnergy {
+  switch unit {
+  case "calories": return .calories
+  case "joules": return .joules
+  case "kilojoules": return .kilojoules
+  default: return .kilocalories
+  }
+}
+
 @available(iOS 17.0, *)
 private func createWorkoutGoal(from data: [String: Any]) -> WorkoutGoal {
-  let type = data["type"] as? String ?? "time"
-  let value = data["value"] as? Double ?? 20.0
-  let unit = data["unit"] as? String ?? "minutes"
-  
+  guard let type = data["type"] as? String, type != "open",
+        let value = data["value"] as? Double else {
+    return .open
+  }
+  let unit = data["unit"] as? String
+
   switch type {
   case "time":
-    let timeUnit: UnitDuration = unit == "hours" ? UnitDuration.hours : UnitDuration.minutes
-    return .time(value, timeUnit)
+    return .time(value, parseDurationUnit(unit))
   case "distance":
-    let distanceUnit: UnitLength = unit == "miles" ? UnitLength.miles : UnitLength.kilometers
-    return .distance(value, distanceUnit)
+    return .distance(value, parseLengthUnit(unit))
+  case "energy":
+    return .energy(value, parseEnergyUnit(unit))
   default:
-    return .time(20, UnitDuration.minutes)
+    return .open
   }
 }
 
 @available(iOS 17.0, *)
 private func createDistance(from data: [String: Any]) -> Measurement<UnitLength> {
   let value = data["value"] as? Double ?? 5.0
-  let unit = data["unit"] as? String ?? "miles"
-  let distanceUnit: UnitLength = unit == "miles" ? UnitLength.miles : UnitLength.kilometers
-  return Measurement(value: value, unit: distanceUnit)
+  return Measurement(value: value, unit: parseLengthUnit(data["unit"] as? String))
 }
 
 @available(iOS 17.0, *)
 private func createTime(from data: [String: Any]) -> Measurement<UnitDuration> {
   let value = data["value"] as? Double ?? 30.0
-  let unit = data["unit"] as? String ?? "minutes"
-  let timeUnit: UnitDuration = unit == "hours" ? UnitDuration.hours : UnitDuration.minutes
-  return Measurement(value: value, unit: timeUnit)
+  return Measurement(value: value, unit: parseDurationUnit(data["unit"] as? String))
 }
 
 @available(iOS 17.0, *)

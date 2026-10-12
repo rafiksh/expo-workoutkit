@@ -47,6 +47,10 @@ public class ExpoRunRecorderModule: Module {
       RunRecorder.shared.resume()
     }.runOnQueue(.main)
 
+    AsyncFunction("stop") {
+      RunRecorder.shared.stop()
+    }.runOnQueue(.main)
+
     AsyncFunction("finish") { (promise: Promise) in
       RunRecorder.shared.finish { promise.resolve($0) }
     }.runOnQueue(.main)

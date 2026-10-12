@@ -45,6 +45,9 @@ declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
   start(activity: RunActivity, outdoor: boolean): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
+  /** GPS off, clock frozen, nothing saved yet. For the finish screen's Save/Discard. */
+  stop(): Promise<void>;
+  /** Saves to Health (stopping first if needed) and returns totals + route. Idempotent. */
   finish(): Promise<RunSummary>;
   discard(): Promise<void>;
   snapshot(): Promise<RunMetrics>;

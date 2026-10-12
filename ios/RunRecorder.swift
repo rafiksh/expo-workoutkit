@@ -68,6 +68,9 @@ final class RunRecorder: NSObject {
   private var pendingDistanceStart: Date?
   private var lastFlushAt = Date.distantPast
   private var lastEmitAt = Date.distantPast
+  private var stoppedAt: Date?
+  // Kept past finish() (which drops the builder) so totals stay readable.
+  private var finalElapsedS: Double?
 
   private static let paceWindowS: TimeInterval = 20
   private static let flushEveryS: TimeInterval = 15
@@ -161,15 +164,25 @@ final class RunRecorder: NSObject {
     setState(.running)
   }
 
-  // Ends recording and saves to Health when allowed. Resolves with the
-  // totals plus the simplified, encoded polyline for the server.
-  func finish(_ done: @escaping ([String: Any]) -> Void) {
-    guard state == .running || state == .paused else { return done(summary(workoutId: nil)) }
+  // Stops recording (GPS off, clock frozen) without saving anything: the
+  // athlete is on the finish screen choosing Save or Discard, and GPS has
+  // no business running while they decide.
+  func stop() {
+    guard state == .running || state == .paused else { return }
     stopLocation()
     flush(force: true)
+    stoppedAt = Date()
     setState(.ended)
-    guard let builder else { return done(summary(workoutId: nil)) }
-    builder.endCollection(withEnd: Date()) { _, _ in
+  }
+
+  // Saves to Health when allowed (stopping first if still recording).
+  // Resolves with the totals plus the simplified, encoded polyline for the
+  // server. A second call resolves the totals without saving twice.
+  func finish(_ done: @escaping ([String: Any]) -> Void) {
+    stop()
+    guard let builder, let end = stoppedAt else { return done(summary(workoutId: nil)) }
+    self.builder = nil
+    builder.endCollection(withEnd: end) { _, _ in
       builder.finishWorkout { workout, _ in
         guard let workout else {
           DispatchQueue.main.async { done(self.summary(workoutId: nil)) }
@@ -230,6 +243,8 @@ final class RunRecorder: NSObject {
     pendingDistanceM = 0
     pendingDistanceStart = nil
     lastEmitAt = .distantPast
+    stoppedAt = nil
+    finalElapsedS = nil
   }
 
   private func stopLocation() {
@@ -319,7 +334,8 @@ final class RunRecorder: NSObject {
       "gps": gpsSignal,
       "health": healthEnabled,
     ]
-    if let builder { out["elapsedS"] = builder.elapsedTime(at: Date()) }
+    if let builder { finalElapsedS = builder.elapsedTime(at: stoppedAt ?? Date()) }
+    if let elapsed = finalElapsedS { out["elapsedS"] = elapsed }
     if let pace = currentPaceSecPerKm { out["paceSecPerKm"] = pace }
     return out
   }

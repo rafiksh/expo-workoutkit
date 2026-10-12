@@ -114,6 +114,17 @@ final class RunRecorder: NSObject {
     }
   }
 
+  // Unlike read access, iOS does report write access, so a refusal can be
+  // told apart from never asked and the app can point at the Health app.
+  var healthWriteStatus: String {
+    guard HKHealthStore.isHealthDataAvailable() else { return "denied" }
+    switch store.authorizationStatus(for: HKObjectType.workoutType()) {
+    case .sharingAuthorized: return "granted"
+    case .sharingDenied: return "denied"
+    default: return "undetermined"
+    }
+  }
+
   var canWriteWorkouts: Bool {
     HKHealthStore.isHealthDataAvailable()
       && store.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized

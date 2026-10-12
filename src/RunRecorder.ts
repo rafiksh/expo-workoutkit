@@ -40,6 +40,8 @@ declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
   /** Asks for When In Use only; background updates come from the location background mode. */
   requestLocationPermission(): Promise<RunPermission>;
   canWriteHealth(): boolean;
+  /** "denied" means the athlete refused; only the Health app can undo it. */
+  getHealthWritePermission(): RunPermission;
   /** One Health sheet: write workout + route + distance + energy, plus the import read set. */
   requestHealthWritePermission(): Promise<boolean>;
   start(activity: RunActivity, outdoor: boolean): Promise<void>;

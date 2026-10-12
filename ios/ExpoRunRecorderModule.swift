@@ -31,6 +31,10 @@ public class ExpoRunRecorderModule: Module {
       RunRecorder.shared.canWriteWorkouts
     }
 
+    Function("getHealthWritePermission") { () -> String in
+      RunRecorder.shared.healthWriteStatus
+    }
+
     AsyncFunction("requestHealthWritePermission") { (promise: Promise) in
       RunRecorder.shared.requestHealth { promise.resolve($0) }
     }.runOnQueue(.main)

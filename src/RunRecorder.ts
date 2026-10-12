@@ -1,4 +1,4 @@
-import { NativeModule, requireNativeModule, requireNativeView } from "expo";
+import { NativeModule, requireNativeView, requireOptionalNativeModule } from "expo";
 import * as React from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 
@@ -50,7 +50,11 @@ declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
   snapshot(): Promise<RunMetrics>;
 }
 
-export const RunRecorder = requireNativeModule<ExpoRunRecorderModule>("ExpoRunRecorder");
+// Optional, never a throwing require: this file loads with the package
+// index, and a binary built before the recorder existed must still boot
+// (apps ship this JS over the air to older binaries). null = unavailable.
+export const RunRecorder =
+  requireOptionalNativeModule<ExpoRunRecorderModule>("ExpoRunRecorder");
 
 export type RunMapViewProps = {
   /** Draw the recorder's live track (no coordinates passed from JS). */
@@ -65,9 +69,11 @@ export type RunMapViewProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-const NativeRunMapView: React.ComponentType<RunMapViewProps> =
-  requireNativeView("ExpoRunRecorder");
+// Resolved on first render, not at import, for the same reason as above.
+// Only render it when RunRecorder is non-null.
+let NativeRunMapView: React.ComponentType<RunMapViewProps> | null = null;
 
 export function RunMapView(props: RunMapViewProps) {
+  NativeRunMapView ??= requireNativeView<RunMapViewProps>("ExpoRunRecorder");
   return React.createElement(NativeRunMapView, props);
 }

@@ -10,10 +10,9 @@ Pod::Spec.new do |s|
   s.license        = package['license']
   s.author         = package['author']
   s.homepage       = package['homepage']
-  s.platforms      = {
-    :ios => '15.1',
-    :tvos => '15.1'
-  }
+  # The run recorder uses iOS 16-17 APIs (MapKit configurations, HealthKit
+  # builders); the app targets 17.0.
+  s.platforms      = { :ios => '17.0' }
   s.swift_version  = '5.9'
   s.source         = { git: 'https://github.com/rafiksh/expo-workoutkit' }
   s.static_framework = true

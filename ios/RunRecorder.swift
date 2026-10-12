@@ -69,6 +69,18 @@ final class RunRecorder: NSObject {
   private var lastFlushAt = Date.distantPast
   private var lastEmitAt = Date.distantPast
   private var stoppedAt: Date?
+  // Moving time: what's banked from earlier running stretches, plus the
+  // current one since runningSince. Pauses never count, so the series'
+  // clock (and every split cut from it) only measures time on the move.
+  private var movingBankS: Double = 0
+  private var runningSince: Date?
+  // The light time series behind the charts and splits: one sample every
+  // sampleEveryS of moving time, plus one at each pause and at the end.
+  // A two-hour run is ~1,500 samples, a few tens of KB once, at the end.
+  private var sampleT: [Double] = []
+  private var sampleD: [Double] = []
+  private var sampleAlt: [Double?] = []
+  private var lastAltitude: Double?
   // Kept past finish() (which drops the builder) so totals stay readable.
   private var finalElapsedS: Double?
 
@@ -76,6 +88,10 @@ final class RunRecorder: NSObject {
   private static let flushEveryS: TimeInterval = 15
   private static let maxAccuracyM: Double = 25
   private static let maxStaleS: TimeInterval = 10
+  private static let sampleEveryS: Double = 5
+  // iPhone altitude is barometer-assisted on recent models; past this it's
+  // GPS-only guesswork and better left blank than drawn as a hill.
+  private static let maxVerticalAccuracyM: Double = 20
 
   // MARK: - Permissions
 
@@ -156,12 +172,17 @@ final class RunRecorder: NSObject {
       location.showsBackgroundLocationIndicator = true
       location.startUpdatingLocation()
     }
+    runningSince = Date()
+    // The series starts at zero so the first split has its true start.
+    sample(force: true)
     setState(.running)
   }
 
   func pause() {
     guard state == .running else { return }
     flush(force: true)
+    bankMoving()
+    sample(force: true)
     addEvent(.pause)
     lastAccepted = nil
     paceWindow.removeAll()
@@ -172,6 +193,7 @@ final class RunRecorder: NSObject {
     guard state == .paused else { return }
     addEvent(.resume)
     segments.append([])
+    runningSince = Date()
     setState(.running)
   }
 
@@ -182,6 +204,8 @@ final class RunRecorder: NSObject {
     guard state == .running || state == .paused else { return }
     stopLocation()
     flush(force: true)
+    bankMoving()
+    sample(force: true)
     stoppedAt = Date()
     setState(.ended)
   }
@@ -241,6 +265,25 @@ final class RunRecorder: NSObject {
     builder?.addWorkoutEvents([event]) { _, _ in }
   }
 
+  private var movingS: Double {
+    movingBankS + (runningSince.map { Date().timeIntervalSince($0) } ?? 0)
+  }
+
+  private func bankMoving() {
+    movingBankS = movingS
+    runningSince = nil
+  }
+
+  private func sample(force: Bool) {
+    let t = movingS
+    if !force, let last = sampleT.last, t - last < Self.sampleEveryS { return }
+    // Never two samples at one instant (a pause right after a sample).
+    if let last = sampleT.last, t - last < 0.5 { return }
+    sampleT.append((t * 10).rounded() / 10)
+    sampleD.append((distanceM * 10).rounded() / 10)
+    sampleAlt.append(lastAltitude.map { ($0 * 10).rounded() / 10 })
+  }
+
   private func reset() {
     builder = nil
     routeBuilder = nil
@@ -256,6 +299,12 @@ final class RunRecorder: NSObject {
     lastEmitAt = .distantPast
     stoppedAt = nil
     finalElapsedS = nil
+    movingBankS = 0
+    runningSince = nil
+    sampleT.removeAll()
+    sampleD.removeAll()
+    sampleAlt.removeAll()
+    lastAltitude = nil
   }
 
   private func stopLocation() {
@@ -287,6 +336,10 @@ final class RunRecorder: NSObject {
       if pendingDistanceStart == nil { pendingDistanceStart = last.timestamp }
     }
     lastAccepted = fix
+    if fix.verticalAccuracy > 0, fix.verticalAccuracy <= Self.maxVerticalAccuracyM {
+      lastAltitude = fix.altitude
+    }
+    sample(force: false)
     segments[segments.count - 1].append(fix.coordinate)
     pendingRoute.append(fix)
     paceWindow.append(fix)
@@ -366,6 +419,12 @@ final class RunRecorder: NSObject {
     var out = metrics()
     out["healthWorkoutId"] = workoutId as Any
     out["route"] = simplified
+    out["movingS"] = movingS
+    out["samples"] = [
+      "t": sampleT,
+      "d": sampleD,
+      "alt": sampleAlt.map { $0.map { $0 as Any } ?? NSNull() },
+    ]
     return out
   }
 }

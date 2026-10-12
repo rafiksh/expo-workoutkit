@@ -28,6 +28,14 @@ export type RunSummary = RunMetrics & {
   healthWorkoutId: string | null;
   /** Simplified route, one Google-encoded polyline (precision 5) per segment between pauses. */
   route: string[];
+  /** Time on the move, pauses excluded. */
+  movingS: number;
+  /**
+   * The light series for charts and splits, one sample per ~5 s of moving
+   * time: t = moving seconds, d = meters, alt = meters or null when GPS
+   * altitude wasn't trustworthy. Same length arrays.
+   */
+  samples: { t: number[]; d: number[]; alt: (number | null)[] };
 };
 
 type RunRecorderEvents = {

@@ -58,10 +58,15 @@ class RunMapView(context: Context, appContext: AppContext) : ExpoView(context, a
 
   init {
     clipChildren = true
-    addView(mapView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-    mapView.onCreate(null)
-    created = true
-    mapView.getMapAsync { googleMap ->
+    // Google Maps aborts the whole process when the manifest carries no API
+    // key (the plugin's googleMapsApiKey). Without one the view stays an
+    // empty box: the run still records, only the map is missing.
+    if (hasMapsApiKey(context)) {
+      addView(mapView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+      mapView.onCreate(null)
+      created = true
+    }
+    if (created) mapView.getMapAsync { googleMap ->
       map = googleMap
       googleMap.uiSettings.apply {
         isRotateGesturesEnabled = false
@@ -90,6 +95,7 @@ class RunMapView(context: Context, appContext: AppContext) : ExpoView(context, a
 
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
     super.onLayout(changed, left, top, right, bottom)
+    if (!created) return
     mapView.layout(0, 0, right - left, bottom - top)
     if (changed && !live) fitStatic()
   }
@@ -231,6 +237,11 @@ class RunMapView(context: Context, appContext: AppContext) : ExpoView(context, a
 
   companion object {
     private const val CHUNK = 64
+
+    private fun hasMapsApiKey(context: Context): Boolean = runCatching {
+      val info = context.packageManager.getApplicationInfo(context.packageName, android.content.pm.PackageManager.GET_META_DATA)
+      !info.metaData?.getString("com.google.android.geo.API_KEY").isNullOrBlank()
+    }.getOrDefault(false)
     private const val MUTED_STYLE = """
       [
         {"featureType":"poi","stylers":[{"visibility":"off"}]},

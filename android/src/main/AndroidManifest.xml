@@ -1,2 +1,66 @@
-<manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- GPS for outdoor runs. Foreground-only is enough: the workout foreground
+       service (type location) keeps updates flowing with the screen off. -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+  <!-- Android 14 only allows a "health" foreground service to an app holding
+       one of the fitness runtime permissions; this is the one we ask for. -->
+  <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <!-- Health Connect. Read set mirrors ExpoHealthKitImport.swift, write set
+       mirrors RunRecorder.shareTypes. -->
+  <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+  <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+  <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+  <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+  <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+  <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+  <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+  <uses-permission android:name="android.permission.health.READ_SLEEP" />
+  <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+  <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+  <uses-permission android:name="android.permission.health.WRITE_EXERCISE_ROUTE" />
+  <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+  <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
+
+  <!-- Package visibility for the Health Connect app on Android 13 and below. -->
+  <queries>
+    <package android:name="com.google.android.apps.healthdata" />
+  </queries>
+
+  <application>
+    <!-- One ongoing notification per workout: GPS + keeps the JS timers alive. -->
+    <service
+      android:name="expo.modules.workoutkit.WorkoutForegroundService"
+      android:exported="false"
+      android:foregroundServiceType="location|health" />
+
+    <!-- Health Connect shows this when the athlete asks why the app wants
+         the data (Android 13 and below use the intent filter, 14+ the alias). -->
+    <activity
+      android:name="expo.modules.workoutkit.HealthRationaleActivity"
+      android:exported="true"
+      android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar">
+      <intent-filter>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+      </intent-filter>
+    </activity>
+    <activity-alias
+      android:name="ViewPermissionUsageActivity"
+      android:exported="true"
+      android:targetActivity="expo.modules.workoutkit.HealthRationaleActivity"
+      android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+      </intent-filter>
+    </activity-alias>
+  </application>
 </manifest>

@@ -1,4 +1,10 @@
-const { withEntitlementsPlist, withInfoPlist, withXcodeProject } = require("@expo/config-plugins");
+const {
+  AndroidConfig,
+  withAndroidManifest,
+  withEntitlementsPlist,
+  withInfoPlist,
+  withXcodeProject,
+} = require("@expo/config-plugins");
 
 const DEFAULT_HEALTH_SHARE_USAGE =
   "This app reads your workouts and health metrics from Apple Health to show them alongside your training plan.";
@@ -25,6 +31,23 @@ const withExpoWorkoutkit = (config, options = {}) => {
     config = withInfoPlist(config, (config) => {
       config.modResults.NSHealthShareUsageDescription =
         options.healthShareUsageDescription ?? DEFAULT_HEALTH_SHARE_USAGE;
+      return config;
+    });
+  }
+
+  // Android: the route map runs on Google Maps, which reads its key from
+  // the app manifest. Permissions, the foreground service and the Health
+  // Connect rationale activity ship in the module's own manifest and merge
+  // on their own; only the key is app-specific. Without a key the map view
+  // renders blank, nothing else is affected.
+  if (options.googleMapsApiKey) {
+    config = withAndroidManifest(config, (config) => {
+      const app = AndroidConfig.Manifest.getMainApplicationOrThrow(config.modResults);
+      AndroidConfig.Manifest.addMetaDataItemToMainApplication(
+        app,
+        "com.google.android.geo.API_KEY",
+        options.googleMapsApiKey,
+      );
       return config;
     });
   }

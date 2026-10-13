@@ -9,10 +9,12 @@ import type {
 } from "./ExpoWorkoutkit.types";
 
 declare class ExpoWorkoutkitModule extends NativeModule {
-  // HealthKit import (iOS only — gate calls on Platform.OS === "ios").
+  // Health import: HealthKit on iOS, Health Connect on Android, one contract.
   isHealthDataAvailable(): boolean;
-  /** Presents the HealthKit permission sheet for all read types the module uses. */
+  /** Presents the Health permission sheet for all read types the module uses. */
   requestHealthAuthorization(): Promise<boolean>;
+  /** Android only: opens Health Connect's settings. Absent on iOS (use x-apple-health://). */
+  openHealthSettings?(): boolean;
   queryWorkouts(
     anchor: string | null,
     limit: number,

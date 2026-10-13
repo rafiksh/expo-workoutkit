@@ -2,9 +2,10 @@ import { NativeModule, requireNativeView, requireOptionalNativeModule } from "ex
 import * as React from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 
-// iOS 17+ only. Records a cardio session on the iPhone: GPS distance, pace,
-// route, and (with write access) an Apple Health workout. Coordinates never
-// cross into JS while recording; the map below draws them natively.
+// Records a cardio session on the phone: GPS distance, pace, route, and
+// (with write access) a workout in Apple Health (iOS 17+) or Health Connect
+// (Android). Coordinates never cross into JS while recording; the map below
+// draws them natively (MapKit / Google Maps).
 
 export type RunPermission = "granted" | "denied" | "undetermined";
 export type RunActivity = "running" | "walking" | "cycling" | "hiking";
@@ -16,9 +17,9 @@ export type RunMetrics = {
   state: RunState;
   distanceM: number;
   gps: GpsSignal;
-  /** True when this run is being recorded into Apple Health. */
+  /** True when this run is being recorded into Apple Health / Health Connect. */
   health: boolean;
-  /** Moving time from the Health builder (excludes pauses); absent without Health. */
+  /** Moving time (excludes pauses). iOS: from the Health builder, absent without Health. Android: always. */
   elapsedS?: number;
   /** Rolling ~20 s pace; absent while standing or without GPS. */
   paceSecPerKm?: number;
@@ -48,7 +49,7 @@ declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
   /** Asks for When In Use only; background updates come from the location background mode. */
   requestLocationPermission(): Promise<RunPermission>;
   canWriteHealth(): boolean;
-  /** "denied" means the athlete refused; only the Health app can undo it. */
+  /** iOS: "denied" means the athlete refused; only the Health app can undo it. Android never says denied: Health Connect's sheet can be shown again. */
   getHealthWritePermission(): RunPermission;
   /** One Health sheet: write workout + route + distance + energy, plus the import read set. */
   requestHealthWritePermission(): Promise<boolean>;

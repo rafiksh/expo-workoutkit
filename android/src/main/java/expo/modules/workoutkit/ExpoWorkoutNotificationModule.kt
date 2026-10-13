@@ -52,19 +52,21 @@ class ExpoWorkoutNotificationModule : Module() {
       )
     }
 
-    AsyncFunction("startWorkoutActivity") { input: Map<String, Any?> ->
+    // JSON in, not a JS object: Expo's Kotlin converter refuses the nested
+    // map with null fields the Live Activity content carries.
+    AsyncFunction("startWorkoutActivity") { json: String ->
       appContext.reactContext?.let { context ->
-        workoutName = input["workoutName"] as? String ?: ""
-        @Suppress("UNCHECKED_CAST")
-        val content = input["content"] as? Map<String, Any?> ?: emptyMap()
+        val input = org.json.JSONObject(json)
+        workoutName = input.optString("workoutName", "")
+        val content = input.optJSONObject("content") ?: org.json.JSONObject()
         WorkoutForegroundService.start(context, NotificationContent.from(workoutName, content))
       }
       Unit
     }
 
-    AsyncFunction("updateWorkoutActivity") { content: Map<String, Any?> ->
+    AsyncFunction("updateWorkoutActivity") { json: String ->
       appContext.reactContext?.let { context ->
-        WorkoutForegroundService.update(context, NotificationContent.from(workoutName, content))
+        WorkoutForegroundService.update(context, NotificationContent.from(workoutName, org.json.JSONObject(json)))
       }
       Unit
     }

@@ -258,19 +258,24 @@ data class NotificationContent(
   val nextLabel: String? = null,
 ) {
   companion object {
-    fun from(workoutName: String, map: Map<String, Any?>): NotificationContent = NotificationContent(
+    private fun org.json.JSONObject.str(key: String): String? =
+      if (isNull(key)) null else optString(key, "").ifEmpty { null }
+    private fun org.json.JSONObject.num(key: String): Long? =
+      if (isNull(key)) null else optDouble(key, Double.NaN).takeUnless { it.isNaN() }?.toLong()
+
+    fun from(workoutName: String, o: org.json.JSONObject): NotificationContent = NotificationContent(
       workoutName = workoutName,
-      stepName = map["stepName"] as? String ?: "",
-      purposeColorHex = map["purposeColorHex"] as? String,
-      stepIndex = (map["stepIndex"] as? Number)?.toInt() ?: 0,
-      stepCount = (map["stepCount"] as? Number)?.toInt() ?: 0,
-      remainingS = (map["remainingS"] as? Number)?.toLong(),
-      stepEndDateMs = (map["stepEndDateMs"] as? Number)?.toLong(),
-      stepStartDateMs = (map["stepStartDateMs"] as? Number)?.toLong(),
-      isPaused = map["isPaused"] as? Boolean ?: false,
-      targetText = map["targetText"] as? String,
-      setText = map["setText"] as? String,
-      nextLabel = map["nextLabel"] as? String,
+      stepName = o.str("stepName") ?: "",
+      purposeColorHex = o.str("purposeColorHex"),
+      stepIndex = o.num("stepIndex")?.toInt() ?: 0,
+      stepCount = o.num("stepCount")?.toInt() ?: 0,
+      remainingS = o.num("remainingS"),
+      stepEndDateMs = o.num("stepEndDateMs"),
+      stepStartDateMs = o.num("stepStartDateMs"),
+      isPaused = o.optBoolean("isPaused", false),
+      targetText = o.str("targetText"),
+      setText = o.str("setText"),
+      nextLabel = o.str("nextLabel"),
     )
   }
 }

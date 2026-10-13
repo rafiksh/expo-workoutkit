@@ -29,7 +29,25 @@ type WorkoutNotificationEvents = {
   onWorkoutAction: (event: { type: WorkoutNotificationAction }) => void;
 };
 
+export type WorkoutNotificationStart = {
+  workoutName: string;
+  sport: string;
+  content: WorkoutNotificationContent;
+};
+
+// The native side takes JSON strings: Expo's Kotlin argument converter
+// rejects the nested object with null fields the content carries.
 declare class ExpoWorkoutNotificationModule extends NativeModule<WorkoutNotificationEvents> {
+  isSupported(): boolean;
+  requestActivityRecognitionPermission(): Promise<"granted" | "denied">;
+  startWorkoutActivity(json: string): Promise<void>;
+  updateWorkoutActivity(json: string): Promise<void>;
+  endWorkoutActivity(): Promise<void>;
+}
+
+const native = requireOptionalNativeModule<ExpoWorkoutNotificationModule>("ExpoWorkoutNotification");
+
+export type WorkoutNotificationApi = {
   isSupported(): boolean;
   /**
    * Android 14+ only lets the service run under the "health" type for an
@@ -37,15 +55,23 @@ declare class ExpoWorkoutNotificationModule extends NativeModule<WorkoutNotifica
    * "granted" where the permission doesn't exist.
    */
   requestActivityRecognitionPermission(): Promise<"granted" | "denied">;
-  startWorkoutActivity(input: {
-    workoutName: string;
-    sport: string;
-    content: WorkoutNotificationContent;
-  }): Promise<void>;
+  startWorkoutActivity(input: WorkoutNotificationStart): Promise<void>;
   updateWorkoutActivity(content: WorkoutNotificationContent): Promise<void>;
   endWorkoutActivity(): Promise<void>;
-}
+  addListener<K extends keyof WorkoutNotificationEvents>(
+    name: K,
+    listener: WorkoutNotificationEvents[K],
+  ): { remove: () => void };
+};
 
 // Optional: null on iOS and on binaries built before it existed.
-export const WorkoutNotification =
-  requireOptionalNativeModule<ExpoWorkoutNotificationModule>("ExpoWorkoutNotification");
+export const WorkoutNotification: WorkoutNotificationApi | null = native
+  ? {
+      isSupported: () => native.isSupported(),
+      requestActivityRecognitionPermission: () => native.requestActivityRecognitionPermission(),
+      startWorkoutActivity: (input) => native.startWorkoutActivity(JSON.stringify(input)),
+      updateWorkoutActivity: (content) => native.updateWorkoutActivity(JSON.stringify(content)),
+      endWorkoutActivity: () => native.endWorkoutActivity(),
+      addListener: (name, listener) => native.addListener(name, listener),
+    }
+  : null;

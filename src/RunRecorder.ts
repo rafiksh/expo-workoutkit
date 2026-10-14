@@ -10,7 +10,7 @@ import type { StyleProp, ViewStyle } from "react-native";
 export type RunPermission = "granted" | "denied" | "undetermined";
 export type RunActivity = "running" | "walking" | "cycling" | "hiking";
 export type RunState = "idle" | "running" | "paused" | "ended";
-// "off" = indoor, no GPS. "none" = outdoor but no fresh fix.
+// "off" = indoor, or GPS not running. "none" = outdoor but no fresh fix.
 export type GpsSignal = "off" | "none" | "weak" | "fair" | "good";
 
 export type RunMetrics = {
@@ -53,6 +53,16 @@ declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
   getHealthWritePermission(): RunPermission;
   /** One Health sheet: write workout + route + distance + energy, plus the import read set. */
   requestHealthWritePermission(): Promise<boolean>;
+  /**
+   * GPS on ahead of Start (no recording), like Strava's record screen:
+   * onRunUpdate reports `gps` so the page can say when it's ready, and
+   * start() seeds the route with the warm fix. Needs location already
+   * granted (never prompts). Switches itself off after 5 minutes.
+   * Absent on binaries built before it existed.
+   */
+  warmUp?(): Promise<void>;
+  /** Leaving the page without starting. Never stops a recording. */
+  coolDown?(): Promise<void>;
   start(activity: RunActivity, outdoor: boolean): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;

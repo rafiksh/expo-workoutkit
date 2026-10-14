@@ -39,6 +39,14 @@ public class ExpoRunRecorderModule: Module {
       RunRecorder.shared.requestHealth { promise.resolve($0) }
     }.runOnQueue(.main)
 
+    AsyncFunction("warmUp") {
+      RunRecorder.shared.warmUp()
+    }.runOnQueue(.main)
+
+    AsyncFunction("coolDown") {
+      RunRecorder.shared.coolDown()
+    }.runOnQueue(.main)
+
     AsyncFunction("start") { (activity: String, outdoor: Bool) in
       RunRecorder.shared.start(activity: activity, outdoor: outdoor)
     }.runOnQueue(.main)

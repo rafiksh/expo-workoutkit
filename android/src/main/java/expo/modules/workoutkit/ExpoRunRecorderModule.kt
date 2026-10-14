@@ -85,6 +85,10 @@ class ExpoRunRecorderModule : Module() {
       HealthPermissionFlow.onActivityResult(appContext, scope, payload.requestCode)
     }
 
+    AsyncFunction("warmUp") { RunRecorder.warmUp() }
+
+    AsyncFunction("coolDown") { RunRecorder.coolDown() }
+
     AsyncFunction("start") { activity: String, outdoor: Boolean ->
       RunRecorder.start(activity, outdoor)
     }

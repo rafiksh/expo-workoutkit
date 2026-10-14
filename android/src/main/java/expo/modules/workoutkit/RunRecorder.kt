@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.HealthConnectClient
@@ -38,6 +39,11 @@ import kotlin.math.roundToLong
 // Backgrounding: the workout foreground service (type location) keeps the
 // process and these updates alive with the screen off. Everything runs on
 // the main looper, so no locks are needed.
+//
+// Cold GPS needs 10-30 s to settle, so the workout page warms it up first
+// (warmUp/coolDown) and Start seeds the route with the warm fix; a wrong
+// first fix is voted out by the ones after it (see reconsider). Same
+// rules as iOS.
 object RunRecorder {
   enum class State(val wire: String) { IDLE("idle"), RUNNING("running"), PAUSED("paused"), ENDED("ended") }
 
@@ -59,6 +65,15 @@ object RunRecorder {
   private var outdoor = true
   private var healthEnabled = false
   private var locationRunning = false
+  // Which request is live: warm-up wants every fix, the run a 2 m filter.
+  private var locationFilterM = -1f
+  // Warm-up: GPS on before Start, nothing recorded, latest usable fix kept.
+  private var warming = false
+  private var warmFix: Location? = null
+  private val mainHandler = Handler(Looper.getMainLooper())
+  private val warmTimeout = Runnable { coolDown() }
+  // Fixes rejected as a jump that agree with each other (see reconsider).
+  private val jumpRun = ArrayList<Location>()
 
   private var distanceM = 0.0
   private var lastAccepted: Location? = null
@@ -87,6 +102,9 @@ object RunRecorder {
   private const val SAMPLE_EVERY_S = 5.0
   // Phone altitude is GPS-only guesswork past this; better blank than a hill.
   private const val MAX_VERTICAL_ACCURACY_M = 20f
+  // Warm-up switches itself off past this, wherever JS is.
+  private const val MAX_WARM_MS = 300_000L
+  private const val REANCHOR_FIXES = 3
 
   fun attach(context: Context) {
     if (this.context == null) {
@@ -116,8 +134,40 @@ object RunRecorder {
 
   // MARK: - Lifecycle
 
+  // GPS on ahead of Start (the workout page), so the chip can say when it's
+  // ready and the run starts from a settled fix. Foreground only: leaving
+  // the app pauses it like any screen. Idempotent.
+  fun warmUp() {
+    if (state != State.IDLE && state != State.ENDED) return
+    if (!hasLocation()) return
+    mainHandler.removeCallbacks(warmTimeout)
+    mainHandler.postDelayed(warmTimeout, MAX_WARM_MS)
+    if (warming) return
+    warming = true
+    outdoor = true
+    warmFix = null
+    lastFixAtMs = null
+    lastAccuracyM = null
+    startLocation(filterM = 0f)
+    emit(force = true)
+  }
+
+  // Left the workout page without starting. Never touches a recording.
+  fun coolDown() {
+    mainHandler.removeCallbacks(warmTimeout)
+    if (!warming) return
+    warming = false
+    warmFix = null
+    if (state != State.RUNNING && state != State.PAUSED) stopLocation()
+    emit(force = true)
+  }
+
   fun start(activity: String, outdoor: Boolean) {
     if (state != State.IDLE && state != State.ENDED) return
+    val seed = if (warming) warmFix else null
+    mainHandler.removeCallbacks(warmTimeout)
+    warming = false
+    warmFix = null
     reset()
     this.activity = activity
     this.outdoor = outdoor
@@ -126,11 +176,19 @@ object RunRecorder {
     healthEnabled = canWriteWorkouts()
     startedAtMs = System.currentTimeMillis()
     context?.let { WorkoutForegroundService.setRecorderActive(it, needsLocation = outdoor && hasLocation()) }
-    if (outdoor && hasLocation()) startLocation()
+    if (outdoor && hasLocation()) startLocation(filterM = 2f) else stopLocation()
     runningSinceMs = startedAtMs
     // The series starts at zero so the first split has its true start.
     sample(force = true)
     setState(State.RUNNING)
+    // The route starts where the athlete stood, not wherever the first fix
+    // after Start lands. Restamped so Health Connect keeps it in the session.
+    if (outdoor && seed != null && System.currentTimeMillis() - seed.time <= MAX_STALE_MS) {
+      accept(Location(seed).apply {
+        time = startedAtMs
+        elapsedRealtimeNanos = android.os.SystemClock.elapsedRealtimeNanos()
+      })
+    }
   }
 
   fun pause() {
@@ -225,6 +283,7 @@ object RunRecorder {
     lastFixAtMs = null
     lastAccuracyM = null
     paceWindow.clear()
+    jumpRun.clear()
     track.clear()
     lastEmitAtMs = 0L
     stoppedAtMs = null
@@ -242,22 +301,26 @@ object RunRecorder {
     }
   }
 
+  // A second request with the same callback replaces the first, so warm-up
+  // hands over to the run's filter without a gap in fixes.
   @SuppressLint("MissingPermission")
-  private fun startLocation() {
+  private fun startLocation(filterM: Float) {
     val client = fused ?: return
-    if (locationRunning) return
+    if (locationRunning && locationFilterM == filterM) return
     val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-      .setMinUpdateDistanceMeters(2f)
+      .setMinUpdateDistanceMeters(filterM)
       .setWaitForAccurateLocation(false)
       .build()
     client.requestLocationUpdates(request, callback, Looper.getMainLooper())
     locationRunning = true
+    locationFilterM = filterM
   }
 
   private fun stopLocation() {
     if (!locationRunning) return
     fused?.removeLocationUpdates(callback)
     locationRunning = false
+    locationFilterM = -1f
   }
 
   private fun setState(next: State) {
@@ -269,6 +332,11 @@ object RunRecorder {
   private fun accept(fix: Location) {
     lastFixAtMs = fix.time
     lastAccuracyM = if (fix.hasAccuracy()) fix.accuracy else null
+    if (warming && state != State.RUNNING && state != State.PAUSED) {
+      if (fix.hasAccuracy() && fix.accuracy <= MAX_ACCURACY_M) warmFix = fix
+      emit(force = false)
+      return
+    }
     if (state != State.RUNNING) return
     if (!fix.hasAccuracy() || fix.accuracy > MAX_ACCURACY_M) return
     if (System.currentTimeMillis() - fix.time > MAX_STALE_MS) return
@@ -278,10 +346,11 @@ object RunRecorder {
       val dt = (fix.time - last.time) / 1000.0
       if (dt <= 0) return
       val d = fix.distanceTo(last).toDouble()
-      if (d / dt > maxSpeedMS) return
+      if (d / dt > maxSpeedMS) return reconsider(fix)
       distanceM += d
     }
     lastAccepted = fix
+    jumpRun.clear()
     if (fix.hasAltitude() && fix.hasVerticalAccuracy() && fix.verticalAccuracyMeters <= MAX_VERTICAL_ACCURACY_M) {
       lastAltitude = fix.altitude
     }
@@ -296,6 +365,41 @@ object RunRecorder {
     emit(force = false)
   }
 
+  // A fix too far from the anchor to be reachable. One is a GPS jump and is
+  // dropped. Several in a row that agree with each other mean the anchor
+  // was the jump (a cold first fix, a bad seed): take them as the truth.
+  // A stray start shorter than the run that outvoted it is erased, line,
+  // distance and Health route alike; past that the line just breaks, never
+  // a straight streak across town.
+  private fun reconsider(fix: Location) {
+    val prev = jumpRun.lastOrNull()
+    if (prev != null && fix.time > prev.time &&
+      fix.distanceTo(prev) / ((fix.time - prev.time) / 1000.0) <= maxSpeedMS
+    ) {
+      jumpRun.add(fix)
+    } else {
+      jumpRun.clear()
+      jumpRun.add(fix)
+    }
+    if (jumpRun.size < REANCHOR_FIXES) return
+    val run = jumpRun.toList()
+    jumpRun.clear()
+    val stray = segments.last()
+    if (stray.size < run.size) {
+      val dropped = track.takeLast(minOf(stray.size, track.size))
+      var strayM = 0.0
+      for (j in 1 until dropped.size) strayM += dropped[j].distanceTo(dropped[j - 1])
+      distanceM = maxOf(0.0, distanceM - strayM)
+      repeat(dropped.size) { track.removeAt(track.size - 1) }
+      stray.clear()
+    } else {
+      segments.add(ArrayList())
+    }
+    lastAccepted = null
+    paceWindow.clear()
+    run.forEach { accept(it) }
+  }
+
   private fun currentPaceSecPerKm(): Double? {
     if (paceWindow.size < 2) return null
     var d = 0.0
@@ -308,6 +412,7 @@ object RunRecorder {
 
   private fun gpsSignal(): String {
     if (!outdoor) return "off"
+    if (!warming && state != State.RUNNING && state != State.PAUSED) return "off"
     val at = lastFixAtMs ?: return "none"
     val accuracy = lastAccuracyM ?: return "none"
     if (System.currentTimeMillis() - at > MAX_STALE_MS) return "none"

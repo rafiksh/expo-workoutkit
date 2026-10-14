@@ -18,6 +18,12 @@ import HealthKit
 // (never BestForNavigation, which adds compass/motion fusion) and stops the
 // instant the run ends. Indoor runs never start it.
 //
+// A cold GPS needs 10-30 s to settle, so like Strava's record screen the
+// app warms it up on the workout page (warmUp/coolDown), shows the signal
+// there, and Start seeds the route with the warm fix: the line begins where
+// the athlete actually stood. A first fix that was wrong anyway is voted
+// out by the fixes after it (see reconsider).
+//
 // Everything runs on the main thread: CLLocationManager delegates arrive
 // there, and HealthKit callbacks hop back to it, so no locks are needed.
 final class RunRecorder: NSObject {
@@ -54,6 +60,13 @@ final class RunRecorder: NSObject {
     return manager
   }()
   private var permissionWaiters: [(CLAuthorizationStatus) -> Void] = []
+  // Warm-up: GPS on before Start, nothing recorded, latest usable fix kept.
+  private var warming = false
+  private var warmFix: CLLocation?
+  private var warmTimer: Timer?
+  // Fixes rejected as a jump that agree with each other. Enough of them and
+  // it was the anchor that was wrong, not them.
+  private var jumpRun: [CLLocation] = []
 
   private var distanceM: Double = 0
   private var lastAccepted: CLLocation?
@@ -92,6 +105,9 @@ final class RunRecorder: NSObject {
   // iPhone altitude is barometer-assisted on recent models; past this it's
   // GPS-only guesswork and better left blank than drawn as a hill.
   private static let maxVerticalAccuracyM: Double = 20
+  // Warm-up switches itself off past this, wherever JS is.
+  private static let maxWarmS: TimeInterval = 300
+  private static let reanchorFixes = 3
 
   // MARK: - Permissions
 
@@ -148,8 +164,44 @@ final class RunRecorder: NSObject {
 
   // MARK: - Lifecycle
 
+  // GPS on ahead of Start (the workout page), so the chip can say when it's
+  // ready and the run starts from a settled fix. No distance filter: a
+  // runner standing at the start still needs fresh fixes. Idempotent.
+  func warmUp() {
+    guard state == .idle || state == .ended, locationStatus == "granted" else { return }
+    warmTimer?.invalidate()
+    warmTimer = Timer.scheduledTimer(withTimeInterval: Self.maxWarmS, repeats: false) { [weak self] _ in
+      self?.coolDown()
+    }
+    guard !warming else { return }
+    warming = true
+    outdoor = true
+    warmFix = nil
+    lastFixAt = nil
+    lastAccuracyM = nil
+    location.distanceFilter = kCLDistanceFilterNone
+    location.startUpdatingLocation()
+    emit(force: true)
+  }
+
+  // Left the workout page without starting. Never touches a recording.
+  func coolDown() {
+    warmTimer?.invalidate()
+    warmTimer = nil
+    guard warming else { return }
+    warming = false
+    warmFix = nil
+    if state != .running && state != .paused { stopLocation() }
+    emit(force: true)
+  }
+
   func start(activity: String, outdoor: Bool) {
     guard state == .idle || state == .ended else { return }
+    let seed = warming ? warmFix : nil
+    warmTimer?.invalidate()
+    warmTimer = nil
+    warming = false
+    warmFix = nil
     reset()
     self.activity = Self.activityType(activity)
     self.outdoor = outdoor
@@ -168,14 +220,25 @@ final class RunRecorder: NSObject {
     }
 
     if outdoor && locationStatus == "granted" {
+      location.distanceFilter = 2
       location.allowsBackgroundLocationUpdates = true
       location.showsBackgroundLocationIndicator = true
       location.startUpdatingLocation()
+    } else {
+      stopLocation()
     }
     runningSince = Date()
     // The series starts at zero so the first split has its true start.
     sample(force: true)
     setState(.running)
+    // The route starts where the athlete stood, not wherever the first
+    // fix after Start lands. Restamped so it sits inside the workout.
+    if outdoor, let seed, -seed.timestamp.timeIntervalSinceNow <= Self.maxStaleS {
+      accept(CLLocation(
+        coordinate: seed.coordinate, altitude: seed.altitude,
+        horizontalAccuracy: seed.horizontalAccuracy, verticalAccuracy: seed.verticalAccuracy,
+        course: seed.course, speed: seed.speed, timestamp: Date()))
+    }
   }
 
   func pause() {
@@ -293,9 +356,13 @@ final class RunRecorder: NSObject {
     lastFixAt = nil
     lastAccuracyM = nil
     paceWindow.removeAll()
+    jumpRun.removeAll()
     pendingRoute.removeAll()
     pendingDistanceM = 0
     pendingDistanceStart = nil
+    // The first batch waits a full interval, so a stray first fix can still
+    // be taken back before HealthKit sees it.
+    lastFlushAt = Date()
     lastEmitAt = .distantPast
     stoppedAt = nil
     finalElapsedS = nil
@@ -321,6 +388,11 @@ final class RunRecorder: NSObject {
   private func accept(_ fix: CLLocation) {
     lastFixAt = fix.timestamp
     lastAccuracyM = fix.horizontalAccuracy
+    if warming && state != .running && state != .paused {
+      if fix.horizontalAccuracy >= 0, fix.horizontalAccuracy <= Self.maxAccuracyM { warmFix = fix }
+      emit(force: false)
+      return
+    }
     guard state == .running,
           fix.horizontalAccuracy >= 0, fix.horizontalAccuracy <= Self.maxAccuracyM,
           -fix.timestamp.timeIntervalSinceNow <= Self.maxStaleS
@@ -330,12 +402,13 @@ final class RunRecorder: NSObject {
       let dt = fix.timestamp.timeIntervalSince(last.timestamp)
       guard dt > 0 else { return }
       let d = fix.distance(from: last)
-      if d / dt > maxSpeedMS { return }
+      if d / dt > maxSpeedMS { return reconsider(fix) }
       distanceM += d
       pendingDistanceM += d
       if pendingDistanceStart == nil { pendingDistanceStart = last.timestamp }
     }
     lastAccepted = fix
+    jumpRun.removeAll()
     if fix.verticalAccuracy > 0, fix.verticalAccuracy <= Self.maxVerticalAccuracyM {
       lastAltitude = fix.altitude
     }
@@ -350,6 +423,44 @@ final class RunRecorder: NSObject {
     NotificationCenter.default.post(name: Self.didAppendNotification, object: nil)
     flush(force: false)
     emit(force: false)
+  }
+
+  // A fix too far from the anchor to be reachable. One is a GPS jump and is
+  // dropped. Several in a row that agree with each other mean the anchor
+  // was the jump (a cold first fix, a bad seed): take them as the truth.
+  // A stray start shorter than the run that outvoted it is erased, line,
+  // distance and Health route alike; past that the line just breaks, never
+  // a straight streak across town.
+  private func reconsider(_ fix: CLLocation) {
+    if let prev = jumpRun.last,
+       fix.timestamp > prev.timestamp,
+       fix.distance(from: prev) / fix.timestamp.timeIntervalSince(prev.timestamp) <= maxSpeedMS {
+      jumpRun.append(fix)
+    } else {
+      jumpRun = [fix]
+    }
+    guard jumpRun.count >= Self.reanchorFixes else { return }
+    let run = jumpRun
+    jumpRun.removeAll()
+    let i = segments.count - 1
+    let stray = segments[i]
+    if stray.count < run.count {
+      var strayM = 0.0
+      for j in stride(from: 1, to: stray.count, by: 1) {
+        strayM += CLLocation(latitude: stray[j].latitude, longitude: stray[j].longitude)
+          .distance(from: CLLocation(latitude: stray[j - 1].latitude, longitude: stray[j - 1].longitude))
+      }
+      distanceM = max(0, distanceM - strayM)
+      pendingDistanceM = max(0, pendingDistanceM - strayM)
+      if pendingDistanceM == 0 { pendingDistanceStart = nil }
+      pendingRoute.removeLast(min(stray.count, pendingRoute.count))
+      segments[i].removeAll()
+    } else {
+      segments.append([])
+    }
+    lastAccepted = nil
+    paceWindow.removeAll()
+    run.forEach(accept)
   }
 
   private func flush(force: Bool) {
@@ -383,7 +494,7 @@ final class RunRecorder: NSObject {
   }
 
   private var gpsSignal: String {
-    guard outdoor else { return "off" }
+    guard outdoor, warming || state == .running || state == .paused else { return "off" }
     guard let at = lastFixAt, -at.timeIntervalSinceNow <= Self.maxStaleS,
           let accuracy = lastAccuracyM, accuracy >= 0 else { return "none" }
     if accuracy <= 10 { return "good" }

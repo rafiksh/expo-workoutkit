@@ -31,8 +31,12 @@ class ExpoWorkoutkitModule : Module() {
     // Presents the Health Connect permission screen for every type the
     // module reads and writes (one sheet, like the iOS combined request).
     AsyncFunction("requestHealthAuthorization") { promise: Promise ->
+      // Connected once the athlete granted anything we read. Requiring the
+      // whole set never succeeds: Health Connect leaves READ_EXERCISE_ROUTES
+      // out of the bulk sheet (routes are consented per session), and a
+      // partial grant is still a working import, as on iOS.
       HealthPermissionFlow.request(appContext, scope) {
-        promise.resolve(HealthStore.granted.containsAll(HealthImport.readPermissions))
+        promise.resolve(HealthImport.readPermissions.any { it in HealthStore.granted })
       }
     }
 

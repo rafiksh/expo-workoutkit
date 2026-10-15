@@ -28,7 +28,6 @@
   <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
   <uses-permission android:name="android.permission.health.WRITE_EXERCISE_ROUTE" />
   <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
-  <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
 
   <!-- Package visibility for the Health Connect app on Android 13 and below. -->
   <queries>

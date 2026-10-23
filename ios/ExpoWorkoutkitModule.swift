@@ -93,6 +93,24 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
+    AsyncFunction("queryWorkoutRoute") { (uuid: String, promise: Promise) in
+      HealthImport.workoutRoute(uuid: uuid) { result in
+        switch result {
+        case .failure(let error): promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)
+        case .success(let points): promise.resolve(points)
+        }
+      }
+    }
+
+    AsyncFunction("queryWorkoutHeartRate") { (uuid: String, promise: Promise) in
+      HealthImport.workoutHeartRate(uuid: uuid) { result in
+        switch result {
+        case .failure(let error): promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)
+        case .success(let points): promise.resolve(points)
+        }
+      }
+    }
+
     AsyncFunction("queryQuantitySamples") { (metric: String, anchor: String?, limit: Int, promise: Promise) in
       guard let (type, unit) = HealthImport.quantityType(for: metric) else {
         promise.reject("ERR_HEALTH_TYPE", "Unknown metric type: \(metric)")

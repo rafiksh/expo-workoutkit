@@ -2,8 +2,10 @@ import { NativeModule, requireNativeModule } from "expo";
 
 import type {
   HealthAnchoredResult,
+  HealthHeartRatePoint,
   HealthMetricId,
   HealthQuantitySample,
+  HealthRoutePoint,
   HealthSleepSample,
   HealthWorkoutSample,
 } from "./ExpoWorkoutkit.types";
@@ -21,6 +23,15 @@ declare class ExpoWorkoutkitModule extends NativeModule {
   ): Promise<HealthAnchoredResult<HealthWorkoutSample>>;
   /** Recent-first page of workouts for browse UIs; pass the last item's startDate as `before` to page older. */
   listWorkouts(before: string | null, limit: number): Promise<HealthWorkoutSample[]>;
+  /**
+   * The GPS route of one imported workout, every fix, oldest first. Empty
+   * for an indoor session or when the recording app kept its route. iOS
+   * reads HealthKit's workout route series; Android returns [] until Health
+   * Connect exercise routes are wired.
+   */
+  queryWorkoutRoute(uuid: string): Promise<HealthRoutePoint[]>;
+  /** Heart rate through one imported workout, oldest first; [] when none was recorded. */
+  queryWorkoutHeartRate(uuid: string): Promise<HealthHeartRatePoint[]>;
   queryQuantitySamples(
     metric: HealthMetricId,
     anchor: string | null,

@@ -7,6 +7,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
+import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
@@ -147,6 +148,54 @@ object HealthImport {
       result[HeartRateRecord.BPM_MAX]?.let { out["maxHr"] = it.toDouble() }
       result[ElevationGainedRecord.ELEVATION_GAINED_TOTAL]?.let { out["elevationGainM"] = it.inMeters }
     }
+    return out
+  }
+
+  // The GPS route one session was recorded with, as the recording app wrote
+  // it: seconds since the session started, position, altitude, accuracy.
+  // Health Connect hands the route back inside the session once the route
+  // grant is held; a session whose route needs per-session consent, or has
+  // none, reads as empty (the iOS twin returns [] for the same cases).
+  suspend fun workoutRoute(context: Context, id: String): List<Map<String, Any?>> {
+    val client = HealthStore.client(context)
+    val session = client.readRecord(ExerciseSessionRecord::class, id).record
+    val result = session.exerciseRouteResult as? ExerciseRouteResult.Data ?: return emptyList()
+    val start = session.startTime.toEpochMilli()
+    return result.exerciseRoute.route.sortedBy { it.time }.map { loc ->
+      val out = HashMap<String, Any?>()
+      out["t"] = (loc.time.toEpochMilli() - start) / 1000.0
+      out["lat"] = loc.latitude
+      out["lng"] = loc.longitude
+      out["acc"] = loc.horizontalAccuracy?.inMeters ?: -1.0
+      loc.altitude?.let { out["alt"] = it.inMeters }
+      out
+    }
+  }
+
+  /** Heart rate through one session: seconds since its start and beats per minute, oldest first. */
+  suspend fun workoutHeartRate(context: Context, id: String): List<Map<String, Any?>> {
+    val client = HealthStore.client(context)
+    val session = client.readRecord(ExerciseSessionRecord::class, id).record
+    val start = session.startTime.toEpochMilli()
+    val out = ArrayList<Map<String, Any?>>()
+    var token: String? = null
+    do {
+      val page = client.readRecords(
+        ReadRecordsRequest(
+          recordType = HeartRateRecord::class,
+          timeRangeFilter = TimeRangeFilter.between(session.startTime, session.endTime),
+          pageSize = 1000,
+          pageToken = token,
+        ),
+      )
+      for (record in page.records) {
+        for (sample in record.samples) {
+          out.add(mapOf("t" to (sample.time.toEpochMilli() - start) / 1000.0, "bpm" to sample.beatsPerMinute.toDouble()))
+        }
+      }
+      token = page.pageToken
+    } while (token != null)
+    out.sortBy { it["t"] as Double }
     return out
   }
 

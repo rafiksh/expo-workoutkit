@@ -9,7 +9,7 @@ enum HealthImport {
   static let store = HKHealthStore()
 
   static let readTypes: Set<HKObjectType> = {
-    var types: Set<HKObjectType> = [HKObjectType.workoutType()]
+    var types: Set<HKObjectType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
     let quantities: [HKQuantityTypeIdentifier] = [
       .heartRate,
       .heartRateVariabilitySDNN,
@@ -112,6 +112,120 @@ enum HealthImport {
       completion(.success((samples ?? [], newAnchor)))
     }
     store.execute(query)
+  }
+
+  // One workout by its uuid, for the per-workout reads below.
+  static func workout(uuid: String, completion: @escaping (HKWorkout?) -> Void) {
+    guard let id = UUID(uuidString: uuid) else {
+      completion(nil)
+      return
+    }
+    let query = HKSampleQuery(
+      sampleType: HKObjectType.workoutType(),
+      predicate: HKQuery.predicateForObject(with: id),
+      limit: 1,
+      sortDescriptors: nil
+    ) { _, samples, _ in
+      completion(samples?.first as? HKWorkout)
+    }
+    store.execute(query)
+  }
+
+  // The GPS trace a workout was recorded with, as the app that recorded it
+  // (Nike Run Club, Strava, the Watch) wrote it to Health: every fix with
+  // seconds since the workout started, position, altitude and horizontal
+  // accuracy. Routes live beside the workout as their own series objects;
+  // a workout may carry several (rare) and they are read in order. Empty
+  // when there is none (indoor, or the recorder kept the route to itself).
+  static func workoutRoute(
+    uuid: String,
+    completion: @escaping (Result<[[String: Any]], Error>) -> Void
+  ) {
+    workout(uuid: uuid) { workout in
+      guard let workout else {
+        completion(.success([]))
+        return
+      }
+      let routeQuery = HKSampleQuery(
+        sampleType: HKSeriesType.workoutRoute(),
+        predicate: HKQuery.predicateForObjects(from: workout),
+        limit: HKObjectQueryNoLimit,
+        sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+      ) { _, samples, error in
+        if let error {
+          completion(.failure(error))
+          return
+        }
+        let routes = samples?.compactMap { $0 as? HKWorkoutRoute } ?? []
+        guard !routes.isEmpty else {
+          completion(.success([]))
+          return
+        }
+        var points: [[String: Any]] = []
+        var remaining = routes.count
+        let start = workout.startDate
+        for route in routes {
+          let query = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
+            if let error {
+              completion(.failure(error))
+              return
+            }
+            for loc in locations ?? [] {
+              var point: [String: Any] = [
+                "t": loc.timestamp.timeIntervalSince(start),
+                "lat": loc.coordinate.latitude,
+                "lng": loc.coordinate.longitude,
+                "acc": loc.horizontalAccuracy,
+              ]
+              if loc.verticalAccuracy >= 0 { point["alt"] = loc.altitude }
+              points.append(point)
+            }
+            if done {
+              remaining -= 1
+              if remaining == 0 {
+                completion(.success(points.sorted { ($0["t"] as? Double ?? 0) < ($1["t"] as? Double ?? 0) }))
+              }
+            }
+          }
+          store.execute(query)
+        }
+      }
+      store.execute(routeQuery)
+    }
+  }
+
+  // Heart rate through the workout: every sample in its window, seconds
+  // since the start and beats per minute, oldest first.
+  static func workoutHeartRate(
+    uuid: String,
+    completion: @escaping (Result<[[String: Any]], Error>) -> Void
+  ) {
+    workout(uuid: uuid) { workout in
+      guard let workout, let type = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+        completion(.success([]))
+        return
+      }
+      let bpm = HKUnit.count().unitDivided(by: .minute())
+      let query = HKSampleQuery(
+        sampleType: type,
+        predicate: HKQuery.predicateForSamples(withStart: workout.startDate, end: workout.endDate, options: []),
+        limit: HKObjectQueryNoLimit,
+        sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+      ) { _, samples, error in
+        if let error {
+          completion(.failure(error))
+          return
+        }
+        let points = (samples?.compactMap { $0 as? HKQuantitySample } ?? []).map { sample -> [String: Any] in
+          [
+            "t": sample.startDate.timeIntervalSince(workout.startDate),
+            "bpm": sample.quantity.doubleValue(for: bpm),
+          ]
+        }
+        completion(.success(points))
+      }
+      store.execute(query)
+    }
   }
 
   static func serializeWorkout(_ workout: HKWorkout) -> [String: Any] {

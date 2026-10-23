@@ -170,6 +170,23 @@ export type HealthWorkoutSample = {
   sourceBundleId?: string;
 };
 
+// One GPS fix of a workout's route as the recording app wrote it to Health:
+// seconds since the workout started, position, altitude in metres when the
+// fix had one, horizontal accuracy in metres.
+export type HealthRoutePoint = {
+  t: number;
+  lat: number;
+  lng: number;
+  alt?: number;
+  acc: number;
+};
+
+/** One heart-rate sample inside a workout: seconds since its start, beats per minute. */
+export type HealthHeartRatePoint = {
+  t: number;
+  bpm: number;
+};
+
 // Wellness metric ids accepted by queryQuantitySamples, each returned in a
 // fixed canonical unit: hrv → ms, resting_hr → bpm, weight → kg,
 // vo2max → mL/(kg·min).

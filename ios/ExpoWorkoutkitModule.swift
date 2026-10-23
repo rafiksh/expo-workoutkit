@@ -93,7 +93,7 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
-    AsyncFunction("queryWorkoutRoute") { (uuid: String, promise: Promise) in
+    AsyncFunction("queryWorkoutRoute") { (uuid: String, _ allowConsent: Bool?, promise: Promise) in
       HealthImport.workoutRoute(uuid: uuid) { result in
         switch result {
         case .failure(let error): promise.reject("ERR_HEALTH_QUERY", error.localizedDescription)

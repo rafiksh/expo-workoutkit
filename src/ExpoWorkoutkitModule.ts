@@ -26,10 +26,13 @@ declare class ExpoWorkoutkitModule extends NativeModule {
   /**
    * The GPS route of one imported workout, every fix, oldest first. Empty
    * for an indoor session or when the recording app kept its route. iOS
-   * reads HealthKit's workout route series; Android returns [] until Health
-   * Connect exercise routes are wired.
+   * reads HealthKit's workout route series. Health Connect hands another
+   * app's route over only with the athlete's consent for that session, a
+   * system sheet: `allowConsent` lets this call show it (pass true from a
+   * tap, never from a background sync); without it such a route reads as
+   * empty. Ignored on iOS.
    */
-  queryWorkoutRoute(uuid: string): Promise<HealthRoutePoint[]>;
+  queryWorkoutRoute(uuid: string, allowConsent?: boolean): Promise<HealthRoutePoint[]>;
   /** Heart rate through one imported workout, oldest first; [] when none was recorded. */
   queryWorkoutHeartRate(uuid: string): Promise<HealthHeartRatePoint[]>;
   queryQuantitySamples(

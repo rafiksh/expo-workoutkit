@@ -7,6 +7,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
+import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -151,19 +152,34 @@ object HealthImport {
     return out
   }
 
+  // What a session's route read came back as: the fixes, a route Health
+  // Connect will only hand over with the athlete's per-session consent (a
+  // sheet the caller may or may not be in a position to show), or nothing.
+  sealed class RouteRead {
+    data class Data(val points: List<Map<String, Any?>>) : RouteRead()
+    data class ConsentRequired(val sessionId: String, val start: Instant) : RouteRead()
+    object None : RouteRead()
+  }
+
   // The GPS route one session was recorded with, as the recording app wrote
   // it: seconds since the session started, position, altitude, accuracy.
-  // Health Connect hands the route back inside the session once the route
-  // grant is held; a session whose route needs per-session consent, or has
-  // none, reads as empty (the iOS twin returns [] for the same cases).
-  suspend fun workoutRoute(context: Context, id: String): List<Map<String, Any?>> {
+  // With the route grant held, Health Connect hands it back inside the
+  // session; without, each session's route is consented on its own sheet.
+  suspend fun workoutRoute(context: Context, id: String): RouteRead {
     val client = HealthStore.client(context)
     val session = client.readRecord(ExerciseSessionRecord::class, id).record
-    val result = session.exerciseRouteResult as? ExerciseRouteResult.Data ?: return emptyList()
-    val start = session.startTime.toEpochMilli()
-    return result.exerciseRoute.route.sortedBy { it.time }.map { loc ->
+    return when (val result = session.exerciseRouteResult) {
+      is ExerciseRouteResult.Data -> RouteRead.Data(serializeRoute(result.exerciseRoute, session.startTime))
+      is ExerciseRouteResult.ConsentRequired -> RouteRead.ConsentRequired(id, session.startTime)
+      else -> RouteRead.None
+    }
+  }
+
+  fun serializeRoute(route: ExerciseRoute, start: Instant): List<Map<String, Any?>> {
+    val startMs = start.toEpochMilli()
+    return route.route.sortedBy { it.time }.map { loc ->
       val out = HashMap<String, Any?>()
-      out["t"] = (loc.time.toEpochMilli() - start) / 1000.0
+      out["t"] = (loc.time.toEpochMilli() - startMs) / 1000.0
       out["lat"] = loc.latitude
       out["lng"] = loc.longitude
       out["acc"] = loc.horizontalAccuracy?.inMeters ?: -1.0

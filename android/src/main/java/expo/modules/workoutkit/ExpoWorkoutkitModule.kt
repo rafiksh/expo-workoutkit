@@ -40,8 +40,9 @@ class ExpoWorkoutkitModule : Module() {
       }
     }
 
-    OnActivityResult { _, payload ->
+    OnActivityResult { activity, payload ->
       HealthPermissionFlow.onActivityResult(appContext, scope, payload.requestCode)
+      RouteConsentFlow.onActivityResult(activity, payload.requestCode, payload.resultCode, payload.data)
     }
 
     // Health Connect's own settings (per-app permissions). The Android twin
@@ -86,7 +87,7 @@ class ExpoWorkoutkitModule : Module() {
       }
     }
 
-    AsyncFunction("queryWorkoutRoute") { uuid: String, promise: Promise ->
+    AsyncFunction("queryWorkoutRoute") { uuid: String, allowConsent: Boolean?, promise: Promise ->
       val context = appContext.reactContext
       if (context == null || !HealthStore.available(context)) {
         promise.resolve(emptyList<Any>())
@@ -94,7 +95,18 @@ class ExpoWorkoutkitModule : Module() {
       }
       scope.launch {
         try {
-          promise.resolve(HealthImport.workoutRoute(context, uuid))
+          when (val read = HealthImport.workoutRoute(context, uuid)) {
+            is HealthImport.RouteRead.Data -> promise.resolve(read.points)
+            is HealthImport.RouteRead.ConsentRequired -> {
+              val activity = appContext.currentActivity
+              if (allowConsent == true && activity != null) {
+                RouteConsentFlow.request(activity, read.sessionId, read.start) { promise.resolve(it) }
+              } else {
+                promise.resolve(emptyList<Any>())
+              }
+            }
+            HealthImport.RouteRead.None -> promise.resolve(emptyList<Any>())
+          }
         } catch (e: Exception) {
           promise.reject("ERR_HEALTH_QUERY", e.message, e)
         }

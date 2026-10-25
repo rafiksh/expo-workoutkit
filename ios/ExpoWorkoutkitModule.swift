@@ -42,6 +42,10 @@ public class ExpoWorkoutkitModule: Module {
 
     // MARK: - HealthKit import (read side, see ExpoHealthKitImport.swift)
 
+    // Lets JS tell a binary whose Health queries take a date window from an
+    // older one, where passing the extra arguments would throw.
+    Constant("healthRangeQueries") { true }
+
     Function("isHealthDataAvailable") { () -> Bool in
       return HKHealthStore.isHealthDataAvailable()
     }
@@ -60,11 +64,13 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
-    AsyncFunction("queryWorkouts") { (anchor: String?, limit: Int, promise: Promise) in
+    AsyncFunction("queryWorkouts") { (anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise) in
       HealthImport.anchoredQuery(
         type: HKObjectType.workoutType(),
         anchor: HealthImport.decodeAnchor(anchor),
-        limit: limit
+        limit: limit,
+        from: HealthImport.date(fromISO),
+        to: HealthImport.date(toISO)
       ) { result in
         switch result {
         case .failure(let error):
@@ -111,7 +117,7 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
-    AsyncFunction("queryQuantitySamples") { (metric: String, anchor: String?, limit: Int, promise: Promise) in
+    AsyncFunction("queryQuantitySamples") { (metric: String, anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise) in
       guard let (type, unit) = HealthImport.quantityType(for: metric) else {
         promise.reject("ERR_HEALTH_TYPE", "Unknown metric type: \(metric)")
         return
@@ -119,7 +125,9 @@ public class ExpoWorkoutkitModule: Module {
       HealthImport.anchoredQuery(
         type: type,
         anchor: HealthImport.decodeAnchor(anchor),
-        limit: limit
+        limit: limit,
+        from: HealthImport.date(fromISO),
+        to: HealthImport.date(toISO)
       ) { result in
         switch result {
         case .failure(let error):
@@ -136,7 +144,7 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
-    AsyncFunction("querySleepSamples") { (anchor: String?, limit: Int, promise: Promise) in
+    AsyncFunction("querySleepSamples") { (anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise) in
       guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
         promise.reject("ERR_HEALTH_TYPE", "Sleep analysis type unavailable")
         return
@@ -144,7 +152,9 @@ public class ExpoWorkoutkitModule: Module {
       HealthImport.anchoredQuery(
         type: sleepType,
         anchor: HealthImport.decodeAnchor(anchor),
-        limit: limit
+        limit: limit,
+        from: HealthImport.date(fromISO),
+        to: HealthImport.date(toISO)
       ) { result in
         switch result {
         case .failure(let error):

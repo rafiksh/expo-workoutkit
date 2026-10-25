@@ -29,6 +29,18 @@ enum HealthImport {
   }()
 
   static let iso = ISO8601DateFormatter()
+  private static let isoFractional: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+  }()
+
+  // A JS Date's toISOString() carries milliseconds, which the plain
+  // formatter refuses; either shape parses.
+  static func date(_ value: String?) -> Date? {
+    guard let value else { return nil }
+    return iso.date(from: value) ?? isoFractional.date(from: value)
+  }
 
   static func encodeAnchor(_ anchor: HKQueryAnchor?) -> String? {
     guard let anchor,
@@ -93,15 +105,23 @@ enum HealthImport {
     store.execute(query)
   }
 
+  // `from`/`to` bound the samples by start date (from inclusive, to
+  // exclusive); nil on both is the whole history. The anchor stays valid
+  // under the same window, so a sync keeps paging inside it.
   static func anchoredQuery(
     type: HKSampleType,
     anchor: HKQueryAnchor?,
     limit: Int,
+    from: Date? = nil,
+    to: Date? = nil,
     completion: @escaping (Result<(samples: [HKSample], newAnchor: HKQueryAnchor?), Error>) -> Void
   ) {
+    let predicate = (from != nil || to != nil)
+      ? HKQuery.predicateForSamples(withStart: from, end: to, options: .strictStartDate)
+      : nil
     let query = HKAnchoredObjectQuery(
       type: type,
-      predicate: nil,
+      predicate: predicate,
       anchor: anchor,
       limit: limit
     ) { _, samples, _, newAnchor, error in

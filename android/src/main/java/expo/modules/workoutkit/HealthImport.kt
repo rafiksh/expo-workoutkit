@@ -12,6 +12,8 @@ import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.InstantRecord
+import androidx.health.connect.client.records.IntervalRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -61,19 +63,34 @@ object HealthImport {
   data class Page(val records: List<Record>, val anchor: String?)
 
   /**
-   * One page of the cursor for `type`. The time filter for the initial
-   * pass is since the epoch (HealthKit's "no predicate"); the changes pass
-   * carries its own window. A changes token Health Connect no longer honours
-   * (30 days idle) restarts from the beginning, as HealthKit's would.
+   * One page of the cursor for `type`. `from`/`to` bound records by start
+   * time (from inclusive, to exclusive), HealthKit's sample predicate; with
+   * neither, the initial pass reads since the epoch ("no predicate"). The
+   * changes pass carries its own window, so the bounds are applied to what
+   * it yields too. A changes token Health Connect no longer honours (30
+   * days idle) restarts from the beginning, as HealthKit's would.
    */
-  suspend fun <T : Record> page(context: Context, type: KClass<T>, anchor: String?, limit: Int): Page {
+  suspend fun <T : Record> page(
+    context: Context,
+    type: KClass<T>,
+    anchor: String?,
+    limit: Int,
+    from: Instant? = null,
+    to: Instant? = null,
+  ): Page {
     val client = HealthStore.client(context)
     if (anchor == null || anchor.startsWith("p:")) {
       val token = anchor?.removePrefix("p:")?.ifEmpty { null }
+      val filter = when {
+        from != null && to != null -> TimeRangeFilter.between(from, to)
+        from != null -> TimeRangeFilter.after(from)
+        to != null -> TimeRangeFilter.before(to)
+        else -> TimeRangeFilter.after(Instant.EPOCH)
+      }
       val response = client.readRecords(
         ReadRecordsRequest(
           recordType = type,
-          timeRangeFilter = TimeRangeFilter.after(Instant.EPOCH),
+          timeRangeFilter = filter,
           pageSize = limit.coerceIn(1, 5000),
           pageToken = token,
         ),
@@ -87,15 +104,24 @@ object HealthImport {
     }
     val token = anchor.removePrefix("c:")
     val changes = client.getChanges(token)
-    if (changes.changesTokenExpired) return page(context, type, null, limit)
+    if (changes.changesTokenExpired) return page(context, type, null, limit, from, to)
     val records = changes.changes.mapNotNull { change ->
       when (change) {
-        is UpsertionChange -> change.record.takeIf { type.isInstance(it) }
+        is UpsertionChange -> change.record.takeIf { type.isInstance(it) && inWindow(it, from, to) }
         is DeletionChange -> null
         else -> null
       }
     }
     return Page(records, "c:" + changes.nextChangesToken)
+  }
+
+  private fun inWindow(record: Record, from: Instant?, to: Instant?): Boolean {
+    val start = when (record) {
+      is IntervalRecord -> record.startTime
+      is InstantRecord -> record.time
+      else -> return true
+    }
+    return (from == null || !start.isBefore(from)) && (to == null || start.isBefore(to))
   }
 
   /** Recent-first page for browse UIs; `before` pages older results. */

@@ -24,6 +24,10 @@ class ExpoWorkoutkitModule : Module() {
 
     OnDestroy { scope.cancel() }
 
+    // Lets JS tell a binary whose Health queries take a date window from an
+    // older one, where passing the extra arguments would throw.
+    Constant("healthRangeQueries") { true }
+
     Function("isHealthDataAvailable") {
       appContext.reactContext?.let { HealthStore.available(it) } ?: false
     }
@@ -53,7 +57,7 @@ class ExpoWorkoutkitModule : Module() {
       runCatching { activity.startActivity(intent) }.isSuccess
     }
 
-    AsyncFunction("queryWorkouts") { anchor: String?, limit: Int, promise: Promise ->
+    AsyncFunction("queryWorkouts") { anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise ->
       val context = appContext.reactContext
       if (context == null || !HealthStore.available(context)) {
         promise.resolve(mapOf("anchor" to anchor, "samples" to emptyList<Any>()))
@@ -61,7 +65,7 @@ class ExpoWorkoutkitModule : Module() {
       }
       scope.launch {
         try {
-          val page = HealthImport.page(context, ExerciseSessionRecord::class, anchor, limit)
+          val page = HealthImport.page(context, ExerciseSessionRecord::class, anchor, limit, instant(fromISO), instant(toISO))
           val samples = page.records.filterIsInstance<ExerciseSessionRecord>().map { HealthImport.serializeWorkout(context, it) }
           promise.resolve(mapOf("anchor" to page.anchor, "samples" to samples))
         } catch (e: Exception) {
@@ -128,7 +132,7 @@ class ExpoWorkoutkitModule : Module() {
       }
     }
 
-    AsyncFunction("queryQuantitySamples") { metric: String, anchor: String?, limit: Int, promise: Promise ->
+    AsyncFunction("queryQuantitySamples") { metric: String, anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise ->
       val context = appContext.reactContext
       val type = HealthImport.quantityType(metric)
       if (context == null || type == null || !HealthStore.available(context)) {
@@ -137,7 +141,7 @@ class ExpoWorkoutkitModule : Module() {
       }
       scope.launch {
         try {
-          val page = HealthImport.page(context, type, anchor, limit)
+          val page = HealthImport.page(context, type, anchor, limit, instant(fromISO), instant(toISO))
           val samples = page.records.mapNotNull { HealthImport.serializeQuantity(metric, it) }
           promise.resolve(mapOf("anchor" to page.anchor, "samples" to samples))
         } catch (e: Exception) {
@@ -146,7 +150,7 @@ class ExpoWorkoutkitModule : Module() {
       }
     }
 
-    AsyncFunction("querySleepSamples") { anchor: String?, limit: Int, promise: Promise ->
+    AsyncFunction("querySleepSamples") { anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise ->
       val context = appContext.reactContext
       if (context == null || !HealthStore.available(context)) {
         promise.resolve(mapOf("anchor" to anchor, "samples" to emptyList<Any>()))
@@ -154,7 +158,7 @@ class ExpoWorkoutkitModule : Module() {
       }
       scope.launch {
         try {
-          val page = HealthImport.page(context, SleepSessionRecord::class, anchor, limit)
+          val page = HealthImport.page(context, SleepSessionRecord::class, anchor, limit, instant(fromISO), instant(toISO))
           val samples = page.records.filterIsInstance<SleepSessionRecord>().flatMap { HealthImport.serializeSleep(it) }
           promise.resolve(mapOf("anchor" to page.anchor, "samples" to samples))
         } catch (e: Exception) {
@@ -166,4 +170,6 @@ class ExpoWorkoutkitModule : Module() {
     // Apple-only in practice; see ExpoWorkoutkitView.
     View(ExpoWorkoutkitView::class) {}
   }
+
+  private fun instant(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }
 }

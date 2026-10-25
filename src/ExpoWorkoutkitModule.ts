@@ -12,6 +12,12 @@ import type {
 
 declare class ExpoWorkoutkitModule extends NativeModule {
   // Health import: HealthKit on iOS, Health Connect on Android, one contract.
+  /**
+   * True on binaries whose anchored queries take a `from`/`to` window
+   * (ISO strings, by start date: from inclusive, to exclusive). Undefined
+   * on older ones, where passing the window throws.
+   */
+  readonly healthRangeQueries?: boolean;
   isHealthDataAvailable(): boolean;
   /** Presents the Health permission sheet for all read types the module uses. */
   requestHealthAuthorization(): Promise<boolean>;
@@ -20,6 +26,8 @@ declare class ExpoWorkoutkitModule extends NativeModule {
   queryWorkouts(
     anchor: string | null,
     limit: number,
+    from?: string | null,
+    to?: string | null,
   ): Promise<HealthAnchoredResult<HealthWorkoutSample>>;
   /** Recent-first page of workouts for browse UIs; pass the last item's startDate as `before` to page older. */
   listWorkouts(before: string | null, limit: number): Promise<HealthWorkoutSample[]>;
@@ -39,10 +47,14 @@ declare class ExpoWorkoutkitModule extends NativeModule {
     metric: HealthMetricId,
     anchor: string | null,
     limit: number,
+    from?: string | null,
+    to?: string | null,
   ): Promise<HealthAnchoredResult<HealthQuantitySample>>;
   querySleepSamples(
     anchor: string | null,
     limit: number,
+    from?: string | null,
+    to?: string | null,
   ): Promise<HealthAnchoredResult<HealthSleepSample>>;
 }
 

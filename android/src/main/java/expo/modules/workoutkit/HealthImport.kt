@@ -6,7 +6,6 @@ import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
-import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -49,7 +48,6 @@ object HealthImport {
     HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
     HealthPermission.getReadPermission(DistanceRecord::class),
     HealthPermission.getReadPermission(SleepSessionRecord::class),
-    HealthPermission.getReadPermission(ElevationGainedRecord::class),
   )
 
   fun quantityType(metric: String): KClass<out Record>? = when (metric) {
@@ -163,7 +161,6 @@ object HealthImport {
             ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
             HeartRateRecord.BPM_AVG,
             HeartRateRecord.BPM_MAX,
-            ElevationGainedRecord.ELEVATION_GAINED_TOTAL,
           ),
           timeRangeFilter = TimeRangeFilter.between(w.startTime, w.endTime),
           dataOriginFilter = setOf(w.metadata.dataOrigin),
@@ -173,7 +170,6 @@ object HealthImport {
       result[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let { out["calories"] = it.inKilocalories }
       result[HeartRateRecord.BPM_AVG]?.let { out["avgHr"] = it.toDouble() }
       result[HeartRateRecord.BPM_MAX]?.let { out["maxHr"] = it.toDouble() }
-      result[ElevationGainedRecord.ELEVATION_GAINED_TOTAL]?.let { out["elevationGainM"] = it.inMeters }
     }
     return out
   }

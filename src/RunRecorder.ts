@@ -87,6 +87,11 @@ export type RunMapViewProps = {
   followUser?: boolean;
   /** Static only: encoded polylines, e.g. RunSummary.route or a saved route. */
   route?: string[];
+  /**
+   * Live only: metres across the map's narrow side while following
+   * (default 400, clamped 100 to 20000). Reapplied when following resumes.
+   */
+  spanMeters?: number;
   /** Hex, e.g. "#E5484D". */
   lineColor?: string;
   onFollowChange?: (event: { nativeEvent: { following: boolean } }) => void;

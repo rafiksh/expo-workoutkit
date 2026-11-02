@@ -48,6 +48,9 @@ class RunMapView(context: Context, appContext: AppContext) : ExpoView(context, a
   private var follow = true
   private var staticRoute: List<List<LatLng>> = emptyList()
   private var lineColor: Int = Color.parseColor("#E5484D")
+  // Live only: metres across the map's narrow side while following, so the
+  // runner sees their street, not the city.
+  private var spanMeters: Double = 400.0
 
   // Live drawing state, per recorder segment.
   private val frozenUpTo = ArrayList<Int>()
@@ -116,6 +119,13 @@ class RunMapView(context: Context, appContext: AppContext) : ExpoView(context, a
   fun setRoute(encoded: List<String>?) {
     staticRoute = (encoded ?: emptyList()).map(RunPolyline::decode).filter { it.size >= 2 }
     if (!live) rebuild()
+  }
+
+  fun setSpanMeters(value: Double?) {
+    val next = (value ?: 400.0).coerceIn(100.0, 20_000.0)
+    if (next == spanMeters) return
+    spanMeters = next
+    applyTracking(animated = true)
   }
 
   fun setLineColor(hex: String?) {
@@ -220,8 +230,18 @@ class RunMapView(context: Context, appContext: AppContext) : ExpoView(context, a
     val googleMap = map ?: return
     if (!live || !observing || !follow) return
     val last = RunRecorder.segments.lastOrNull { it.isNotEmpty() }?.lastOrNull() ?: return
-    val update = CameraUpdateFactory.newLatLngZoom(last, 16f)
+    val update = CameraUpdateFactory.newLatLngZoom(last, followZoom(last.latitude))
     if (animated) googleMap.animateCamera(update, 600, null) else googleMap.moveCamera(update)
+  }
+
+  // Google zoom whose narrow side spans `spanMeters` at this latitude:
+  // 156543 m per dp at zoom 0 on the equator, halving each level.
+  private fun followZoom(lat: Double): Float {
+    val density = resources.displayMetrics.density
+    val sideDp = minOf(width, height).takeIf { it > 0 }?.div(density) ?: return 17f
+    val metersPerDp = spanMeters / sideDp
+    val zoom = Math.log(156_543.03392 * Math.cos(Math.toRadians(lat)) / metersPerDp) / Math.log(2.0)
+    return zoom.toFloat().coerceIn(3f, 20f)
   }
 
   private fun fitStatic() {

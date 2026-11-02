@@ -248,6 +248,62 @@ enum HealthImport {
     }
   }
 
+  // The laps and segments the recording app marked (HKWorkoutEvent .lap
+  // and .segment), plus the workout's activities on iOS 16+ (one per
+  // step of a multi-activity or custom workout, with its own distance).
+  // Seconds since the workout started, oldest first; [] when none.
+  static func workoutEvents(
+    uuid: String,
+    completion: @escaping ([[String: Any]]) -> Void
+  ) {
+    workout(uuid: uuid) { workout in
+      guard let workout else {
+        completion([])
+        return
+      }
+      let start = workout.startDate
+      var out: [[String: Any]] = []
+      for event in workout.workoutEvents ?? [] {
+        let kind: String
+        switch event.type {
+        case .lap: kind = "lap"
+        case .segment: kind = "segment"
+        default: continue
+        }
+        let interval = event.dateInterval
+        guard interval.duration > 0 else { continue }
+        out.append([
+          "kind": kind,
+          "startS": interval.start.timeIntervalSince(start),
+          "endS": interval.end.timeIntervalSince(start),
+        ])
+      }
+      if #available(iOS 16.0, *) {
+        let distanceIds: [HKQuantityTypeIdentifier] = [
+          .distanceWalkingRunning, .distanceCycling, .distanceSwimming,
+        ]
+        for activity in workout.workoutActivities {
+          let end = activity.endDate ?? workout.endDate
+          guard end > activity.startDate else { continue }
+          var item: [String: Any] = [
+            "kind": "activity",
+            "startS": activity.startDate.timeIntervalSince(start),
+            "endS": end.timeIntervalSince(start),
+          ]
+          for id in distanceIds {
+            if let type = HKObjectType.quantityType(forIdentifier: id),
+               let sum = activity.statistics(for: type)?.sumQuantity() {
+              item["distanceM"] = sum.doubleValue(for: .meter())
+              break
+            }
+          }
+          out.append(item)
+        }
+      }
+      completion(out.sorted { ($0["startS"] as? Double ?? 0) < ($1["startS"] as? Double ?? 0) })
+    }
+  }
+
   static func serializeWorkout(_ workout: HKWorkout) -> [String: Any] {
     var dict: [String: Any] = [
       "uuid": workout.uuid.uuidString,

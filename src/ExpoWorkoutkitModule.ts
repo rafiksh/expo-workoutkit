@@ -7,6 +7,7 @@ import type {
   HealthQuantitySample,
   HealthRoutePoint,
   HealthSleepSample,
+  HealthWorkoutEvent,
   HealthWorkoutSample,
 } from "./ExpoWorkoutkit.types";
 
@@ -43,6 +44,12 @@ declare class ExpoWorkoutkitModule extends NativeModule {
   queryWorkoutRoute(uuid: string, allowConsent?: boolean): Promise<HealthRoutePoint[]>;
   /** Heart rate through one imported workout, oldest first; [] when none was recorded. */
   queryWorkoutHeartRate(uuid: string): Promise<HealthHeartRatePoint[]>;
+  /**
+   * Laps, segments and (iOS 16+) activities marked inside one imported
+   * workout, oldest first; [] when none. Optional: absent on binaries built
+   * before it existed, so guard the call.
+   */
+  queryWorkoutEvents?(uuid: string): Promise<HealthWorkoutEvent[]>;
   queryQuantitySamples(
     metric: HealthMetricId,
     anchor: string | null,

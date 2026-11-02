@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseRouteResult
+import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
@@ -238,6 +239,38 @@ object HealthImport {
       token = page.pageToken
     } while (token != null)
     out.sortBy { it["t"] as Double }
+    return out
+  }
+
+  /**
+   * The laps and segments the recording app marked on one session, seconds
+   * since its start, oldest first. A rest or pause segment says so, the
+   * only purpose Health Connect carries.
+   */
+  suspend fun workoutEvents(context: Context, id: String): List<Map<String, Any?>> {
+    val client = HealthStore.client(context)
+    val session = client.readRecord(ExerciseSessionRecord::class, id).record
+    val start = session.startTime.toEpochMilli()
+    val out = ArrayList<Map<String, Any?>>()
+    for (lap in session.laps) {
+      val item = HashMap<String, Any?>()
+      item["kind"] = "lap"
+      item["startS"] = (lap.startTime.toEpochMilli() - start) / 1000.0
+      item["endS"] = (lap.endTime.toEpochMilli() - start) / 1000.0
+      lap.length?.let { item["distanceM"] = it.inMeters }
+      out.add(item)
+    }
+    for (segment in session.segments) {
+      val item = HashMap<String, Any?>()
+      item["kind"] = "segment"
+      item["startS"] = (segment.startTime.toEpochMilli() - start) / 1000.0
+      item["endS"] = (segment.endTime.toEpochMilli() - start) / 1000.0
+      if (segment.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST ||
+        segment.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE
+      ) item["rest"] = true
+      out.add(item)
+    }
+    out.sortBy { it["startS"] as Double }
     return out
   }
 

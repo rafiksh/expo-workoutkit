@@ -116,6 +116,7 @@ class ExpoRunRecorderModule : Module() {
       Prop("live") { view: RunMapView, value: Boolean? -> view.setLive(value ?: false) }
       Prop("followUser") { view: RunMapView, value: Boolean? -> view.setFollow(value ?: true) }
       Prop("route") { view: RunMapView, value: List<String>? -> view.setRoute(value) }
+      Prop("spanMeters") { view: RunMapView, value: Double? -> view.setSpanMeters(value) }
       Prop("lineColor") { view: RunMapView, value: String? -> view.setLineColor(value) }
     }
   }

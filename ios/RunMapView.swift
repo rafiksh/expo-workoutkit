@@ -19,6 +19,14 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   private var follow = true
   private var staticRoute: [[CLLocationCoordinate2D]] = []
   private var lineColor: UIColor = .systemRed
+  // Live only: metres across the map's narrow side while following, so the
+  // runner sees their street, not the city. Applied when following starts
+  // (or comes back from a pan) and on the first fix if none was known yet.
+  private var spanMeters: Double = 400
+  private var zoomPending = true
+  // Programmatic camera moves can flip the tracking mode; those flips are
+  // ours, not the runner's pan, so they must not reach JS.
+  private var moving = false
 
   // Live drawing state, per recorder segment.
   private var frozenUpTo: [Int] = []
@@ -66,6 +74,14 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   func setRoute(_ encoded: [String]?) {
     staticRoute = (encoded ?? []).map(RunPolyline.decode).filter { $0.count >= 2 }
     if !live { rebuild() }
+  }
+
+  func setSpanMeters(_ value: Double?) {
+    let next = max(100, min(value ?? 400, 20_000))
+    guard next != spanMeters else { return }
+    spanMeters = next
+    zoomPending = true
+    applyTracking()
   }
 
   func setLineColor(_ hex: String?) {
@@ -144,7 +160,36 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
 
   private func applyTracking() {
     guard live, observing else { return }
+    if follow {
+      zoomPending = true
+      if let here = runnerCoordinate() { zoom(to: here) }
+    }
+    moving = true
     map.setUserTrackingMode(follow ? .follow : .none, animated: true)
+    moving = false
+  }
+
+  // Newest recorded fix, else the map's own blue dot; nil before any fix.
+  private func runnerCoordinate() -> CLLocationCoordinate2D? {
+    if let last = RunRecorder.shared.segments.last(where: { !$0.isEmpty })?.last { return last }
+    if let loc = map.userLocation.location { return loc.coordinate }
+    return nil
+  }
+
+  private func zoom(to center: CLLocationCoordinate2D) {
+    zoomPending = false
+    let region = MKCoordinateRegion(center: center, latitudinalMeters: spanMeters, longitudinalMeters: spanMeters)
+    moving = true
+    map.setRegion(region, animated: false)
+    if follow { map.setUserTrackingMode(.follow, animated: false) }
+    moving = false
+  }
+
+  // The first fix after following starts: MapKit's default camera is a
+  // whole country, so zoom in on it once.
+  func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+    guard live, observing, follow, zoomPending, let loc = userLocation.location else { return }
+    zoom(to: loc.coordinate)
   }
 
   private func fitStatic() {
@@ -170,7 +215,7 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   // A pan drops follow mode; JS shows a recenter control and sets follow
   // back to true when tapped.
   func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
-    guard live, observing else { return }
+    guard live, observing, !moving else { return }
     let following = mode != .none
     if following != follow {
       follow = following

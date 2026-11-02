@@ -187,6 +187,22 @@ export type HealthHeartRatePoint = {
   bpm: number;
 };
 
+/**
+ * A lap, segment or activity the recording app marked inside a workout:
+ * seconds since its start. "lap" and "segment" are HKWorkoutEvent .lap /
+ * .segment (Health Connect laps / segments); "activity" is one of an iOS 16+
+ * workout's activities (a step of a multi-activity or custom workout).
+ * `distanceM` when the source kept one for it; `rest` when the source marked
+ * the segment as rest or pause (Health Connect only).
+ */
+export type HealthWorkoutEvent = {
+  kind: "lap" | "segment" | "activity";
+  startS: number;
+  endS: number;
+  distanceM?: number;
+  rest?: boolean;
+};
+
 // Wellness metric ids accepted by queryQuantitySamples, each returned in a
 // fixed canonical unit: hrv → ms, resting_hr → bpm, weight → kg,
 // vo2max → mL/(kg·min).

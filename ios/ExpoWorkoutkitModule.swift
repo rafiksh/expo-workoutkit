@@ -117,6 +117,12 @@ public class ExpoWorkoutkitModule: Module {
       }
     }
 
+    AsyncFunction("queryWorkoutEvents") { (uuid: String, promise: Promise) in
+      HealthImport.workoutEvents(uuid: uuid) { events in
+        promise.resolve(events)
+      }
+    }
+
     AsyncFunction("queryQuantitySamples") { (metric: String, anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise) in
       guard let (type, unit) = HealthImport.quantityType(for: metric) else {
         promise.reject("ERR_HEALTH_TYPE", "Unknown metric type: \(metric)")

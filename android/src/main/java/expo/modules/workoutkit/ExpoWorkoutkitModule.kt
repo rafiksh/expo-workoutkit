@@ -132,6 +132,21 @@ class ExpoWorkoutkitModule : Module() {
       }
     }
 
+    AsyncFunction("queryWorkoutEvents") { uuid: String, promise: Promise ->
+      val context = appContext.reactContext
+      if (context == null || !HealthStore.available(context)) {
+        promise.resolve(emptyList<Any>())
+        return@AsyncFunction
+      }
+      scope.launch {
+        try {
+          promise.resolve(HealthImport.workoutEvents(context, uuid))
+        } catch (e: Exception) {
+          promise.reject("ERR_HEALTH_QUERY", e.message, e)
+        }
+      }
+    }
+
     AsyncFunction("queryQuantitySamples") { metric: String, anchor: String?, limit: Int, fromISO: String?, toISO: String?, promise: Promise ->
       val context = appContext.reactContext
       val type = HealthImport.quantityType(metric)

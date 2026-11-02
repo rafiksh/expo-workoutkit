@@ -87,6 +87,9 @@ public class ExpoRunRecorderModule: Module {
       Prop("route") { (view: RunMapView, value: [String]?) in
         view.setRoute(value)
       }
+      Prop("spanMeters") { (view: RunMapView, value: Double?) in
+        view.setSpanMeters(value)
+      }
       Prop("lineColor") { (view: RunMapView, value: String?) in
         view.setLineColor(value)
       }

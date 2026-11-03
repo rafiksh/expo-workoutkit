@@ -22,11 +22,13 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   // Live only: metres across the map's narrow side while following, so the
   // runner sees their street, not the city. Applied when following starts
   // (or comes back from a pan) and on the first fix if none was known yet.
+  //
+  // Following is ours, not MKUserTrackingMode: engaging .follow re-zooms to
+  // MapKit's own default (about 1.3 km across) whatever region was set, so
+  // the camera is zoomed once here and then only re-centred on each fix,
+  // which keeps the span and any pinch the runner made.
   private var spanMeters: Double = 400
   private var zoomPending = true
-  // Programmatic camera moves can flip the tracking mode; those flips are
-  // ours, not the runner's pan, so they must not reach JS.
-  private var moving = false
 
   // Live drawing state, per recorder segment.
   private var frozenUpTo: [Int] = []
@@ -56,6 +58,9 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   override func layoutSubviews() {
     super.layoutSubviews()
     map.frame = bounds
+    // A region set while the map had no size reads back as the whole world;
+    // the zoom waits for a real frame.
+    if zoomPending { applyTracking() }
   }
 
   // MARK: - Props
@@ -159,14 +164,9 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   }
 
   private func applyTracking() {
-    guard live, observing else { return }
-    if follow {
-      zoomPending = true
-      if let here = runnerCoordinate() { zoom(to: here) }
-    }
-    moving = true
-    map.setUserTrackingMode(follow ? .follow : .none, animated: true)
-    moving = false
+    guard live, observing, follow else { return }
+    zoomPending = true
+    if let here = runnerCoordinate() { zoom(to: here) }
   }
 
   // Newest recorded fix, else the map's own blue dot; nil before any fix.
@@ -177,19 +177,22 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
   }
 
   private func zoom(to center: CLLocationCoordinate2D) {
+    if map.frame.isEmpty { map.frame = bounds }
+    guard !map.frame.isEmpty else { return }
     zoomPending = false
     let region = MKCoordinateRegion(center: center, latitudinalMeters: spanMeters, longitudinalMeters: spanMeters)
-    moving = true
-    map.setRegion(region, animated: false)
-    if follow { map.setUserTrackingMode(.follow, animated: false) }
-    moving = false
+    map.setRegion(map.regionThatFits(region), animated: false)
   }
 
-  // The first fix after following starts: MapKit's default camera is a
-  // whole country, so zoom in on it once.
+  // The first fix after following starts zooms in (MapKit's default camera
+  // is a whole country); every later one only re-centres.
   func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-    guard live, observing, follow, zoomPending, let loc = userLocation.location else { return }
-    zoom(to: loc.coordinate)
+    guard live, observing, follow, let loc = userLocation.location else { return }
+    if zoomPending {
+      zoom(to: loc.coordinate)
+    } else {
+      map.setCenter(loc.coordinate, animated: true)
+    }
   }
 
   private func fitStatic() {
@@ -212,15 +215,25 @@ final class RunMapView: ExpoView, MKMapViewDelegate {
     return renderer
   }
 
-  // A pan drops follow mode; JS shows a recenter control and sets follow
-  // back to true when tapped.
-  func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
-    guard live, observing, !moving else { return }
-    let following = mode != .none
-    if following != follow {
-      follow = following
-      onFollowChange(["following": following])
+  // A pan drops follow; JS shows a recenter control and sets follow back
+  // to true when tapped. Only a finger moves the camera off the runner:
+  // a camera change while one of the map's gestures is live is a pan. A
+  // pinch keeps following (the centre stays on the runner).
+  func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+    guard live, observing, follow, userPanning() else { return }
+    follow = false
+    onFollowChange(["following": false])
+  }
+
+  private func userPanning() -> Bool {
+    var views: [UIView] = [map]
+    while let view = views.popLast() {
+      for g in view.gestureRecognizers ?? [] where g is UIPanGestureRecognizer {
+        if g.state == .began || g.state == .changed { return true }
+      }
+      views.append(contentsOf: view.subviews)
     }
+    return false
   }
 }
 

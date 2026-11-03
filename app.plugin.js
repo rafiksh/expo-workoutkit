@@ -4,7 +4,7 @@ const {
   withEntitlementsPlist,
   withInfoPlist,
   withXcodeProject,
-} = require("@expo/config-plugins");
+} = require("expo/config-plugins");
 
 const DEFAULT_HEALTH_SHARE_USAGE =
   "This app reads your workouts and health metrics from Apple Health to show them alongside your training plan.";

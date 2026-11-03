@@ -1,7 +1,7 @@
 import { requireNativeView } from "expo";
 import * as React from "react";
 
-import { PreviewWorkoutButtonProps } from "./ExpoWorkoutkit.types";
+import type { PreviewWorkoutButtonProps } from "./ExpoWorkoutkit.types";
 
 const NativeView: React.ComponentType<PreviewWorkoutButtonProps> =
   requireNativeView("ExpoWorkoutkit");

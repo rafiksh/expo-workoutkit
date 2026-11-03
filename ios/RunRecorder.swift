@@ -97,6 +97,22 @@ final class RunRecorder: NSObject {
   // Kept past finish() (which drops the builder) so totals stay readable.
   private var finalElapsedS: Double?
 
+  // Live heart rate, from whichever source is fresh: a paired Bluetooth
+  // strap (HeartRateMonitor, ~1 Hz) first, else heart-rate samples landing
+  // in HealthKit during the run (an Apple Watch running a workout syncs
+  // them to the phone, in batches seconds to a minute apart). Each value is
+  // one number per reading; nothing is polled.
+  private var hrQuery: HKAnchoredObjectQuery?
+  private var hrFrom = Date.distantPast
+  private var healthHrBpm: Int?
+  private var healthHrAt: Date?
+  private var hrSum = 0.0
+  private var hrCount = 0
+  private var hrMax: Int?
+  private var sampleHr: [Int?] = []
+  // Strap readings for Apple Health, flushed with the distance batches.
+  private var pendingHr: [HKQuantitySample] = []
+
   private static let paceWindowS: TimeInterval = 20
   private static let flushEveryS: TimeInterval = 15
   private static let maxAccuracyM: Double = 25
@@ -108,6 +124,10 @@ final class RunRecorder: NSObject {
   // Warm-up switches itself off past this, wherever JS is.
   private static let maxWarmS: TimeInterval = 300
   private static let reanchorFixes = 3
+  // A strap reading older than this means the strap went quiet.
+  private static let strapFreshS: TimeInterval = 5
+  // Watch samples reach the phone late; past this one isn't "live".
+  private static let healthHrFreshS: TimeInterval = 45
 
   // MARK: - Permissions
 
@@ -132,7 +152,7 @@ final class RunRecorder: NSObject {
 
   static let shareTypes: Set<HKSampleType> = {
     var types: Set<HKSampleType> = [HKObjectType.workoutType(), HKSeriesType.workoutRoute()]
-    for id in [HKQuantityTypeIdentifier.distanceWalkingRunning, .distanceCycling, .activeEnergyBurned] {
+    for id in [HKQuantityTypeIdentifier.distanceWalkingRunning, .distanceCycling, .activeEnergyBurned, .heartRate] {
       if let type = HKObjectType.quantityType(forIdentifier: id) { types.insert(type) }
     }
     return types
@@ -181,6 +201,8 @@ final class RunRecorder: NSObject {
     lastAccuracyM = nil
     location.distanceFilter = kCLDistanceFilterNone
     location.startUpdatingLocation()
+    // A paired strap connects now too, so its number is there at Start.
+    HeartRateMonitor.shared.hold("warm")
     emit(force: true)
   }
 
@@ -192,6 +214,7 @@ final class RunRecorder: NSObject {
     warming = false
     warmFix = nil
     if state != .running && state != .paused { stopLocation() }
+    HeartRateMonitor.shared.release("warm")
     emit(force: true)
   }
 
@@ -227,6 +250,7 @@ final class RunRecorder: NSObject {
     } else {
       stopLocation()
     }
+    startHeartRate()
     runningSince = Date()
     // The series starts at zero so the first split has its true start.
     sample(force: true)
@@ -266,9 +290,10 @@ final class RunRecorder: NSObject {
   func stop() {
     guard state == .running || state == .paused else { return }
     stopLocation()
-    flush(force: true)
     bankMoving()
     sample(force: true)
+    stopHeartRate()
+    flush(force: true)
     stoppedAt = Date()
     setState(.ended)
   }
@@ -298,6 +323,7 @@ final class RunRecorder: NSObject {
 
   func discard() {
     stopLocation()
+    stopHeartRate()
     builder?.discardWorkout()
     routeBuilder?.discard()
     reset()
@@ -345,6 +371,7 @@ final class RunRecorder: NSObject {
     sampleT.append((t * 10).rounded() / 10)
     sampleD.append((distanceM * 10).rounded() / 10)
     sampleAlt.append(lastAltitude.map { ($0 * 10).rounded() / 10 })
+    sampleHr.append(currentHeartRate?.bpm)
   }
 
   private func reset() {
@@ -372,6 +399,13 @@ final class RunRecorder: NSObject {
     sampleD.removeAll()
     sampleAlt.removeAll()
     lastAltitude = nil
+    healthHrBpm = nil
+    healthHrAt = nil
+    hrSum = 0
+    hrCount = 0
+    hrMax = nil
+    sampleHr.removeAll()
+    pendingHr.removeAll()
   }
 
   private func stopLocation() {
@@ -481,6 +515,13 @@ final class RunRecorder: NSObject {
     }
     pendingDistanceM = 0
     pendingDistanceStart = nil
+    // Its own call: a refused heart-rate write must not sink the distance.
+    if let builder, !pendingHr.isEmpty,
+       let type = HKObjectType.quantityType(forIdentifier: .heartRate),
+       store.authorizationStatus(for: type) == .sharingAuthorized {
+      builder.add(pendingHr) { _, _ in }
+    }
+    pendingHr.removeAll()
   }
 
   private var currentPaceSecPerKm: Double? {
@@ -512,6 +553,10 @@ final class RunRecorder: NSObject {
     if let builder { finalElapsedS = builder.elapsedTime(at: stoppedAt ?? Date()) }
     if let elapsed = finalElapsedS { out["elapsedS"] = elapsed }
     if let pace = currentPaceSecPerKm { out["paceSecPerKm"] = pace }
+    if state == .running || state == .paused, let hr = currentHeartRate {
+      out["heartRateBpm"] = hr.bpm
+      out["heartRateSource"] = hr.source
+    }
     return out
   }
 
@@ -531,12 +576,110 @@ final class RunRecorder: NSObject {
     out["healthWorkoutId"] = workoutId as Any
     out["route"] = simplified
     out["movingS"] = movingS
-    out["samples"] = [
+    var samples: [String: Any] = [
       "t": sampleT,
       "d": sampleD,
       "alt": sampleAlt.map { $0.map { $0 as Any } ?? NSNull() },
     ]
+    // Only when a heart was heard: a run with no sensor carries no hr array.
+    if sampleHr.contains(where: { $0 != nil }) {
+      samples["hr"] = sampleHr.map { $0.map { $0 as Any } ?? NSNull() }
+    }
+    out["samples"] = samples
+    if hrCount > 0 { out["avgHeartRateBpm"] = Int((hrSum / Double(hrCount)).rounded()) }
+    if let hrMax { out["maxHeartRateBpm"] = hrMax }
     return out
+  }
+}
+
+// MARK: - Heart rate
+
+extension RunRecorder {
+  fileprivate var currentHeartRate: (bpm: Int, source: String)? {
+    if let bpm = HeartRateMonitor.shared.fresh(maxAgeS: Self.strapFreshS) { return (bpm, "strap") }
+    if let bpm = healthHrBpm, let at = healthHrAt, -at.timeIntervalSinceNow <= Self.healthHrFreshS {
+      return (bpm, "health")
+    }
+    return nil
+  }
+
+  fileprivate func startHeartRate() {
+    hrFrom = Date()
+    let monitor = HeartRateMonitor.shared
+    monitor.onReading = { [weak self] bpm in self?.strapReading(bpm) }
+    monitor.hold("run")
+    monitor.release("warm")
+    startHealthHeartRate()
+  }
+
+  fileprivate func stopHeartRate() {
+    if let hrQuery { store.stop(hrQuery) }
+    hrQuery = nil
+    HeartRateMonitor.shared.onReading = nil
+    HeartRateMonitor.shared.release("run")
+  }
+
+  private func count(_ bpm: Int) {
+    guard state == .running else { return }
+    hrSum += Double(bpm)
+    hrCount += 1
+    hrMax = max(hrMax ?? bpm, bpm)
+  }
+
+  private func strapReading(_ bpm: Int) {
+    count(bpm)
+    if builder != nil, let type = HKObjectType.quantityType(forIdentifier: .heartRate) {
+      let now = Date()
+      pendingHr.append(HKQuantitySample(
+        type: type,
+        quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: Double(bpm)),
+        start: now, end: now))
+    }
+    // Indoors this is what keeps the panel moving; the GPS fixes do outdoors.
+    emit(force: false)
+  }
+
+  // Heart-rate samples written to HealthKit from now on by anyone but us
+  // (our own strap samples would echo back): a Watch workout, or another
+  // app's strap. The query lives as long as the run and costs nothing
+  // while nothing arrives. Needs read access to heart rate, which the
+  // import already asks for; without it the query just stays silent.
+  private func startHealthHeartRate() {
+    guard HKHealthStore.isHealthDataAvailable(),
+          let type = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+    let recent = HKQuery.predicateForSamples(
+      withStart: Date().addingTimeInterval(-60), end: nil, options: [])
+    let notOurs = NSCompoundPredicate(
+      notPredicateWithSubpredicate: HKQuery.predicateForObjects(from: HKSource.default()))
+    let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [recent, notOurs])
+    let handle: ([HKSample]?) -> Void = { [weak self] samples in
+      let latest = (samples as? [HKQuantitySample])?.max { $0.endDate < $1.endDate }
+      guard let latest else { return }
+      DispatchQueue.main.async { self?.healthSamples(samples as? [HKQuantitySample] ?? [], latest: latest) }
+    }
+    let query = HKAnchoredObjectQuery(
+      type: type, predicate: predicate, anchor: nil, limit: HKObjectQueryNoLimit
+    ) { _, samples, _, _, _ in handle(samples) }
+    query.updateHandler = { _, samples, _, _, _ in handle(samples) }
+    hrQuery = query
+    store.execute(query)
+  }
+
+  private func healthSamples(_ samples: [HKQuantitySample], latest: HKQuantitySample) {
+    guard hrQuery != nil else { return }
+    let unit = HKUnit.count().unitDivided(by: .minute())
+    // A strap that's talking already counts every beat; don't double up.
+    let strapLive = HeartRateMonitor.shared.fresh(maxAgeS: Self.strapFreshS) != nil
+    if !strapLive {
+      for s in samples where s.endDate > (healthHrAt ?? .distantPast) && s.endDate >= hrFrom {
+        count(Int(s.quantity.doubleValue(for: unit).rounded()))
+      }
+    }
+    if latest.endDate > (healthHrAt ?? .distantPast) {
+      healthHrBpm = Int(latest.quantity.doubleValue(for: unit).rounded())
+      healthHrAt = latest.endDate
+    }
+    emit(force: false)
   }
 }
 

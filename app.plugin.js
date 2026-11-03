@@ -35,6 +35,22 @@ const withExpoWorkoutkit = (config, options = {}) => {
     });
   }
 
+  // Bluetooth heart-rate straps in the run recorder. Opt-in: without the
+  // usage string the module never touches CoreBluetooth (iOS would kill the
+  // app), so straps just don't exist. bluetooth-central keeps a connected
+  // strap's readings flowing while a run is recorded with the screen off.
+  // Android's Bluetooth permissions ship in the module manifest.
+  if (options.heartRateMonitorUsageDescription) {
+    config = withInfoPlist(config, (config) => {
+      config.modResults.NSBluetoothAlwaysUsageDescription =
+        options.heartRateMonitorUsageDescription;
+      const modes = new Set(config.modResults.UIBackgroundModes ?? []);
+      modes.add("bluetooth-central");
+      config.modResults.UIBackgroundModes = [...modes];
+      return config;
+    });
+  }
+
   // Android: the route map runs on Google Maps, which reads its key from
   // the app manifest. Permissions, the foreground service and the Health
   // Connect rationale activity ship in the module's own manifest and merge

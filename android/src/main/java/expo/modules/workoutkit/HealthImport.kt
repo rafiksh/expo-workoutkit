@@ -13,8 +13,6 @@ import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
-import androidx.health.connect.client.records.InstantRecord
-import androidx.health.connect.client.records.IntervalRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -117,9 +115,19 @@ object HealthImport {
   }
 
   private fun inWindow(record: Record, from: Instant?, to: Instant?): Boolean {
+    // IntervalRecord and InstantRecord are internal to connect-client (Kotlin
+    // 2.3 enforces it), so the window is read off the concrete types read here.
     val start = when (record) {
-      is IntervalRecord -> record.startTime
-      is InstantRecord -> record.time
+      is ExerciseSessionRecord -> record.startTime
+      is SleepSessionRecord -> record.startTime
+      is HeartRateRecord -> record.startTime
+      is DistanceRecord -> record.startTime
+      is ActiveCaloriesBurnedRecord -> record.startTime
+      is ElevationGainedRecord -> record.startTime
+      is WeightRecord -> record.time
+      is Vo2MaxRecord -> record.time
+      is RestingHeartRateRecord -> record.time
+      is HeartRateVariabilityRmssdRecord -> record.time
       else -> return true
     }
     return (from == null || !start.isBefore(from)) && (to == null || start.isBefore(to))

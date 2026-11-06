@@ -6,7 +6,7 @@ public class ExpoRunRecorderModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoRunRecorder")
 
-    Events("onRunUpdate", "onRunState", "onHeartRateMonitors", "onHeartRateMonitorState")
+    Events("onRunUpdate", "onRunState")
 
     OnCreate {
       RunRecorder.shared.onUpdate = { [weak self] metrics in
@@ -15,41 +15,7 @@ public class ExpoRunRecorderModule: Module {
       RunRecorder.shared.onState = { [weak self] state in
         self?.sendEvent("onRunState", ["state": state])
       }
-      HeartRateMonitor.shared.onMonitors = { [weak self] monitors in
-        self?.sendEvent("onHeartRateMonitors", ["monitors": monitors])
-      }
-      HeartRateMonitor.shared.onState = { [weak self] state in
-        self?.sendEvent("onHeartRateMonitorState", state)
-      }
     }
-
-    // Bluetooth heart-rate straps. Never prompts on its own: the
-    // permission sheet appears on the first scan.
-    Function("getHeartRateMonitor") { () -> [String: Any] in
-      let monitor = HeartRateMonitor.shared
-      var out: [String: Any] = ["supported": monitor.supported, "permission": monitor.permission]
-      if let saved = monitor.saved { out["monitor"] = saved }
-      return out
-    }
-
-    AsyncFunction("scanHeartRateMonitors") {
-      HeartRateMonitor.shared.scan()
-    }.runOnQueue(.main)
-
-    // The pairing screen closed: stop scanning and let the strap go unless
-    // a run is using it.
-    AsyncFunction("stopHeartRateMonitorScan") {
-      HeartRateMonitor.shared.stopScan()
-      HeartRateMonitor.shared.release("screen")
-    }.runOnQueue(.main)
-
-    AsyncFunction("pairHeartRateMonitor") { (id: String) -> Bool in
-      HeartRateMonitor.shared.pair(id)
-    }.runOnQueue(.main)
-
-    AsyncFunction("forgetHeartRateMonitor") {
-      HeartRateMonitor.shared.forget()
-    }.runOnQueue(.main)
 
     // Async on main: the first touch creates the CLLocationManager, and its
     // delegate callbacks arrive on the thread that created it.

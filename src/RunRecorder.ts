@@ -25,12 +25,12 @@ export type RunMetrics = {
   paceSecPerKm?: number;
   /**
    * Live heart rate while recording, absent when nothing fresh is heard.
-   * Sources: a paired Bluetooth strap (both platforms, ~1 Hz), else on iOS
-   * heart-rate samples reaching HealthKit during the run (an Apple Watch
-   * running a workout; they land in batches, so up to ~45 s old).
+   * iOS only: heart-rate samples reaching HealthKit during the run (an
+   * Apple Watch running a workout, or a strap paired with another app;
+   * they land in batches, so up to ~45 s old).
    */
   heartRateBpm?: number;
-  heartRateSource?: "strap" | "health";
+  heartRateSource?: "health";
 };
 
 export type RunSummary = RunMetrics & {
@@ -52,28 +52,9 @@ export type RunSummary = RunMetrics & {
   maxHeartRateBpm?: number;
 };
 
-export type HeartRateMonitorInfo = {
-  /** False on a device without Bluetooth LE, or an iOS app without the plugin's usage string. */
-  supported: boolean;
-  /** "denied" is iOS only (Settings undoes it); Android asks again at the next scan. */
-  permission: RunPermission;
-  /** The paired strap, if any. id is opaque (a UUID on iOS, an address on Android). */
-  monitor?: { id: string; name: string };
-};
-
-export type HeartRateMonitorState = {
-  bluetooth: "on" | "off" | "unauthorized" | "unsupported" | "unknown";
-  connection: "disconnected" | "connecting" | "connected";
-  scanning: boolean;
-  /** The paired strap's live reading, while the pairing screen holds it. */
-  bpm?: number;
-};
-
 type RunRecorderEvents = {
   onRunUpdate: (metrics: RunMetrics) => void;
   onRunState: (event: { state: RunState }) => void;
-  onHeartRateMonitors: (event: { monitors: { id: string; name: string }[] }) => void;
-  onHeartRateMonitorState: (state: HeartRateMonitorState) => void;
 };
 
 declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
@@ -104,17 +85,6 @@ declare class ExpoRunRecorderModule extends NativeModule<RunRecorderEvents> {
   finish(): Promise<RunSummary>;
   discard(): Promise<void>;
   snapshot(): Promise<RunMetrics>;
-  // Bluetooth heart-rate straps. Absent on binaries built before them.
-  // Once paired, the recorder connects the strap itself from warm-up to
-  // stop; nothing else is needed for heartRateBpm to flow.
-  getHeartRateMonitor?(): HeartRateMonitorInfo;
-  /** Lists nearby straps (onHeartRateMonitors) for ~20 s; asks for Bluetooth the first time. Also connects the paired one so the screen can show its bpm. */
-  scanHeartRateMonitors?(): Promise<void>;
-  /** The pairing screen closed: stop scanning and let the strap go unless a run holds it. */
-  stopHeartRateMonitorScan?(): Promise<void>;
-  /** Remembers a strap from the scan; false if it's no longer known. */
-  pairHeartRateMonitor?(id: string): Promise<boolean>;
-  forgetHeartRateMonitor?(): Promise<void>;
 }
 
 // Optional, never a throwing require: this file loads with the package

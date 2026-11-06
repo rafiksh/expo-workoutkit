@@ -25,14 +25,12 @@ class ExpoRunRecorderModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExpoRunRecorder")
 
-    Events("onRunUpdate", "onRunState", "onHeartRateMonitors", "onHeartRateMonitorState")
+    Events("onRunUpdate", "onRunState")
 
     OnCreate {
       appContext.reactContext?.let { RunRecorder.attach(it) }
       RunRecorder.onUpdate = { metrics -> sendEvent("onRunUpdate", metrics) }
       RunRecorder.onState = { state -> sendEvent("onRunState", mapOf("state" to state)) }
-      HeartRateMonitor.onMonitors = { monitors -> sendEvent("onHeartRateMonitors", mapOf("monitors" to monitors)) }
-      HeartRateMonitor.onState = { state -> sendEvent("onHeartRateMonitorState", state) }
       // Prime the Health Connect grant cache so canWriteHealth answers
       // right on the first session; refreshed again after every request.
       scope.launch { runCatching { appContext.reactContext?.let { HealthStore.refreshGranted(it) } } }
@@ -41,8 +39,6 @@ class ExpoRunRecorderModule : Module() {
     OnDestroy {
       RunRecorder.onUpdate = null
       RunRecorder.onState = null
-      HeartRateMonitor.onMonitors = null
-      HeartRateMonitor.onState = null
       scope.cancel()
     }
 
@@ -89,47 +85,6 @@ class ExpoRunRecorderModule : Module() {
     OnActivityResult { _, payload ->
       HealthPermissionFlow.onActivityResult(appContext, scope, payload.requestCode)
     }
-
-    // Bluetooth heart-rate straps, same contract as iOS. The permission
-    // sheet (Nearby devices on 12+, location before) appears on the first
-    // scan, never on its own.
-    Function("getHeartRateMonitor") {
-      val out = HashMap<String, Any?>()
-      out["supported"] = HeartRateMonitor.supported
-      out["permission"] = if (HeartRateMonitor.granted()) "granted" else "undetermined"
-      HeartRateMonitor.saved?.let { out["monitor"] = it }
-      out
-    }
-
-    AsyncFunction("scanHeartRateMonitors") { promise: Promise ->
-      if (HeartRateMonitor.granted()) {
-        HeartRateMonitor.scan()
-        promise.resolve(null)
-        return@AsyncFunction
-      }
-      val manager = appContext.permissions
-      if (manager == null) {
-        HeartRateMonitor.scan()
-        promise.resolve(null)
-        return@AsyncFunction
-      }
-      manager.askForPermissions(
-        { _ ->
-          HeartRateMonitor.scan()
-          promise.resolve(null)
-        },
-        *HeartRateMonitor.permissions,
-      )
-    }.runOnQueue(Queues.MAIN)
-
-    AsyncFunction("stopHeartRateMonitorScan") {
-      HeartRateMonitor.stopScan()
-      HeartRateMonitor.release("screen")
-    }.runOnQueue(Queues.MAIN)
-
-    AsyncFunction("pairHeartRateMonitor") { id: String -> HeartRateMonitor.pair(id) }.runOnQueue(Queues.MAIN)
-
-    AsyncFunction("forgetHeartRateMonitor") { HeartRateMonitor.forget() }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("warmUp") { RunRecorder.warmUp() }
 

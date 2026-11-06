@@ -12,15 +12,6 @@
   <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-  <!-- Bluetooth heart-rate straps (HeartRateMonitor.kt). Scanning never
-       derives location; Android 11 and below scan under the location grant
-       the run already holds. -->
-  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-  <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-  <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
-
   <!-- Health Connect. Read set mirrors ExpoHealthKitImport.swift, write set
        mirrors RunRecorder.shareTypes. -->
   <uses-permission android:name="android.permission.health.READ_EXERCISE" />

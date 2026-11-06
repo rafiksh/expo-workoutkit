@@ -95,12 +95,6 @@ object RunRecorder {
   private val sampleD = ArrayList<Double>()
   private val sampleAlt = ArrayList<Double?>()
   private var lastAltitude: Double? = null
-  // Live heart rate from a paired Bluetooth strap (HeartRateMonitor), the
-  // only live source on Android: Health Connect has no stream.
-  private val sampleHr = ArrayList<Int?>()
-  private var hrSum = 0.0
-  private var hrCount = 0
-  private var hrMax: Int? = null
 
   private const val PACE_WINDOW_MS = 20_000L
   private const val MAX_ACCURACY_M = 25f
@@ -111,14 +105,11 @@ object RunRecorder {
   // Warm-up switches itself off past this, wherever JS is.
   private const val MAX_WARM_MS = 300_000L
   private const val REANCHOR_FIXES = 3
-  // A strap reading older than this means the strap went quiet.
-  private const val STRAP_FRESH_MS = 5_000L
 
   fun attach(context: Context) {
     if (this.context == null) {
       this.context = context.applicationContext
       fused = LocationServices.getFusedLocationProviderClient(context.applicationContext)
-      HeartRateMonitor.attach(context)
     }
   }
 
@@ -158,8 +149,6 @@ object RunRecorder {
     lastFixAtMs = null
     lastAccuracyM = null
     startLocation(filterM = 0f)
-    // A paired strap connects now too, so its number is there at Start.
-    HeartRateMonitor.hold("warm")
     emit(force = true)
   }
 
@@ -170,7 +159,6 @@ object RunRecorder {
     warming = false
     warmFix = null
     if (state != State.RUNNING && state != State.PAUSED) stopLocation()
-    HeartRateMonitor.release("warm")
     emit(force = true)
   }
 
@@ -189,9 +177,6 @@ object RunRecorder {
     startedAtMs = System.currentTimeMillis()
     context?.let { WorkoutForegroundService.setRecorderActive(it, needsLocation = outdoor && hasLocation()) }
     if (outdoor && hasLocation()) startLocation(filterM = 2f) else stopLocation()
-    HeartRateMonitor.onReading = { bpm -> strapReading(bpm) }
-    HeartRateMonitor.hold("run")
-    HeartRateMonitor.release("warm")
     runningSinceMs = startedAtMs
     // The series starts at zero so the first split has its true start.
     sample(force = true)
@@ -229,7 +214,6 @@ object RunRecorder {
     stopLocation()
     bankMoving()
     sample(force = true)
-    stopHeartRate()
     stoppedAtMs = System.currentTimeMillis()
     context?.let { WorkoutForegroundService.setRecorderActive(it, needsLocation = false, active = false) }
     setState(State.ENDED)
@@ -262,7 +246,6 @@ object RunRecorder {
 
   fun discard() {
     stopLocation()
-    stopHeartRate()
     context?.let { WorkoutForegroundService.setRecorderActive(it, needsLocation = false, active = false) }
     reset()
     setState(State.IDLE)
@@ -290,22 +273,6 @@ object RunRecorder {
     sampleT.add((t * 10).roundToLong() / 10.0)
     sampleD.add((distanceM * 10).roundToLong() / 10.0)
     sampleAlt.add(lastAltitude?.let { (it * 10).roundToLong() / 10.0 })
-    sampleHr.add(HeartRateMonitor.fresh(STRAP_FRESH_MS))
-  }
-
-  private fun stopHeartRate() {
-    HeartRateMonitor.onReading = null
-    HeartRateMonitor.release("run")
-  }
-
-  private fun strapReading(bpm: Int) {
-    if (state == State.RUNNING) {
-      hrSum += bpm
-      hrCount += 1
-      hrMax = maxOf(hrMax ?: bpm, bpm)
-    }
-    // Indoors this is what keeps the panel moving; the GPS fixes do outdoors.
-    emit(force = false)
   }
 
   private fun reset() {
@@ -326,10 +293,6 @@ object RunRecorder {
     sampleD.clear()
     sampleAlt.clear()
     lastAltitude = null
-    sampleHr.clear()
-    hrSum = 0.0
-    hrCount = 0
-    hrMax = null
   }
 
   private val callback = object : LocationCallback() {
@@ -468,12 +431,6 @@ object RunRecorder {
     // number (pauses excluded), so it is always present.
     out["elapsedS"] = movingS
     currentPaceSecPerKm()?.let { out["paceSecPerKm"] = it }
-    if (state == State.RUNNING || state == State.PAUSED) {
-      HeartRateMonitor.fresh(STRAP_FRESH_MS)?.let {
-        out["heartRateBpm"] = it
-        out["heartRateSource"] = "strap"
-      }
-    }
     return out
   }
 
@@ -499,11 +456,7 @@ object RunRecorder {
       "d" to sampleD.toList(),
       "alt" to sampleAlt.toList(),
     )
-    // Only when a heart was heard: a run with no strap carries no hr array.
-    if (sampleHr.any { it != null }) samples["hr"] = sampleHr.toList()
     out["samples"] = samples
-    if (hrCount > 0) out["avgHeartRateBpm"] = Math.round(hrSum / hrCount).toInt()
-    hrMax?.let { out["maxHeartRateBpm"] = it }
     return out
   }
 }

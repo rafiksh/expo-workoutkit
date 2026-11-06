@@ -78,16 +78,25 @@ export type WorkoutStep = {
   alert?: WorkoutAlert;
 };
 
-// WorkoutAlert from WorkoutKit
-export type WorkoutAlert = {
-  type: "speed" | "heartRate" | "power" | "cadence" | "pace";
-  target: {
-    min: number;
-    max: number;
-    unit: string;
-  };
-  metric: "current" | "average" | "maximum";
-};
+// WorkoutAlert from WorkoutKit: the target a step shows on the Watch and
+// alerts against. min + max is a range; a single bound is a threshold
+// (speed, power, cadence). Heart rate has no threshold alert, so an open
+// end is closed at 40 or 220 bpm. Pace travels as speed: WorkoutKit has no
+// pace alert, the Watch renders speed as pace for running. An alert the
+// activity can't carry is dropped natively rather than failing the plan.
+export type WorkoutAlert =
+  | { type: "heartRate"; min?: number; max?: number }
+  | { type: "heartRateZone"; zone: 1 | 2 | 3 | 4 | 5 }
+  | {
+      type: "speed";
+      min?: number;
+      max?: number;
+      unit: "metersPerSecond" | "kilometersPerHour" | "milesPerHour";
+      metric?: "current" | "average";
+    }
+  | { type: "power"; min?: number; max?: number }
+  | { type: "powerZone"; zone: number }
+  | { type: "cadence"; min?: number; max?: number };
 
 // IntervalStep from WorkoutKit
 export type IntervalStep = {

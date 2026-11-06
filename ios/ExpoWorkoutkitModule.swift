@@ -308,9 +308,9 @@ private func createCustomWorkout(from data: [String: Any]?) -> WorkoutPlan {
   let activity = parseActivity(from: data["activity"] as? String)
   let location = parseLocation(from: data["location"] as? String)
   let displayName = data["displayName"] as? String
-  let warmup = createWorkoutStep(from: data["warmup"] as? [String: Any])
-  let cooldown = createWorkoutStep(from: data["cooldown"] as? [String: Any])
-  let blocks = createBlocks(from: data["blocks"] as? [[String: Any]])
+  let warmup = createWorkoutStep(from: data["warmup"] as? [String: Any], activity: activity, location: location)
+  let cooldown = createWorkoutStep(from: data["cooldown"] as? [String: Any], activity: activity, location: location)
+  let blocks = createBlocks(from: data["blocks"] as? [[String: Any]], activity: activity, location: location)
   
   let customWorkout = CustomWorkout(
     activity: activity,
@@ -386,28 +386,121 @@ private func createTime(from data: [String: Any]) -> Measurement<UnitDuration> {
 }
 
 @available(iOS 17.0, *)
-private func createWorkoutStep(from data: [String: Any]?) -> WorkoutStep? {
+private func createWorkoutStep(
+  from data: [String: Any]?,
+  activity: HKWorkoutActivityType,
+  location: HKWorkoutSessionLocationType
+) -> WorkoutStep? {
   guard let data = data, let goalData = data["goal"] as? [String: Any] else { return nil }
-  let goal = createWorkoutGoal(from: goalData)
-  return WorkoutStep(goal: goal)
+  return buildStep(goalData: goalData, alertData: data["alert"] as? [String: Any], activity: activity, location: location)
 }
 
 @available(iOS 17.0, *)
-private func createBlocks(from data: [[String: Any]]?) -> [IntervalBlock] {
+private func buildStep(
+  goalData: [String: Any],
+  alertData: [String: Any]?,
+  activity: HKWorkoutActivityType,
+  location: HKWorkoutSessionLocationType
+) -> WorkoutStep {
+  let goal = createWorkoutGoal(from: goalData)
+  guard let alertData, let alert = createWorkoutAlert(from: alertData) else {
+    return WorkoutStep(goal: goal)
+  }
+  // An alert the activity can't carry (power on an outdoor walk, say) would
+  // make the whole plan invalid; the step goes without it instead.
+  guard CustomWorkout.supportsAlert(alert, activity: activity, location: location) else {
+    return WorkoutStep(goal: goal)
+  }
+  return WorkoutStep(goal: goal, alert: alert)
+}
+
+// Shapes mirror the WorkoutAlert union in src/ExpoWorkoutkit.types.ts.
+// Ranges need both bounds; a single bound becomes a threshold where
+// WorkoutKit has one (speed, power, cadence). Heart rate has no threshold
+// alert, so an open end is closed at a physiological bound.
+@available(iOS 17.0, *)
+private func createWorkoutAlert(from data: [String: Any]) -> (any WorkoutAlert)? {
+  let min = data["min"] as? Double
+  let max = data["max"] as? Double
+  let metric: WorkoutAlertMetric = data["metric"] as? String == "average" ? .average : .current
+
+  switch data["type"] as? String {
+  case "heartRateZone":
+    guard let zone = data["zone"] as? Int, (1...5).contains(zone) else { return nil }
+    return HeartRateZoneAlert(zone: zone)
+  case "heartRate":
+    guard min != nil || max != nil else { return nil }
+    let lo = min ?? 40, hi = max ?? 220
+    guard lo <= hi else { return nil }
+    return HeartRateRangeAlert.heartRate(lo...hi)
+  case "speed":
+    let unit = parseSpeedUnit(data["unit"] as? String)
+    if let lo = min, let hi = max {
+      guard lo <= hi else { return nil }
+      return SpeedRangeAlert.speed(lo...hi, unit: unit, metric: metric)
+    }
+    guard let value = min ?? max else { return nil }
+    return SpeedThresholdAlert.speed(value, unit: unit, metric: metric)
+  case "powerZone":
+    guard let zone = data["zone"] as? Int, zone >= 1 else { return nil }
+    return PowerZoneAlert(zone: zone)
+  case "power":
+    if let lo = min, let hi = max {
+      guard lo <= hi else { return nil }
+      return PowerRangeAlert.power(lo...hi, unit: .watts)
+    }
+    guard let value = min ?? max else { return nil }
+    return PowerThresholdAlert.power(value, unit: .watts)
+  case "cadence":
+    if let lo = min, let hi = max {
+      guard lo <= hi else { return nil }
+      return CadenceRangeAlert.cadence(lo...hi)
+    }
+    guard let value = min ?? max else { return nil }
+    return CadenceThresholdAlert.cadence(value)
+  default:
+    return nil
+  }
+}
+
+private func parseSpeedUnit(_ unit: String?) -> UnitSpeed {
+  switch unit {
+  case "kilometersPerHour": return .kilometersPerHour
+  case "milesPerHour": return .milesPerHour
+  default: return .metersPerSecond
+  }
+}
+
+@available(iOS 17.0, *)
+private func createBlocks(
+  from data: [[String: Any]]?,
+  activity: HKWorkoutActivityType,
+  location: HKWorkoutSessionLocationType
+) -> [IntervalBlock] {
   guard let data = data else { return [] }
   return data.map { blockData in
-    let steps = (blockData["steps"] as? [[String: Any]])?.compactMap { createIntervalStep(from: $0) } ?? []
+    let steps = (blockData["steps"] as? [[String: Any]])?.compactMap {
+      createIntervalStep(from: $0, activity: activity, location: location)
+    } ?? []
     return IntervalBlock(steps: steps, iterations: blockData["iterations"] as? Int ?? 1)
   }
 }
 
 @available(iOS 17.0, *)
-private func createIntervalStep(from data: [String: Any]) -> IntervalStep? {
+private func createIntervalStep(
+  from data: [String: Any],
+  activity: HKWorkoutActivityType,
+  location: HKWorkoutSessionLocationType
+) -> IntervalStep? {
   guard let stepData = data["step"] as? [String: Any],
         let goalData = stepData["goal"] as? [String: Any] else { return nil }
-  
+
   let purpose: IntervalStep.Purpose = data["purpose"] as? String == "recovery" ? .recovery : .work
-  let goal = createWorkoutGoal(from: goalData)
-  let workoutStep = WorkoutStep(goal: goal)
-  return IntervalStep(purpose, step: workoutStep)
+  let step = buildStep(
+    goalData: goalData,
+    alertData: stepData["alert"] as? [String: Any],
+    activity: activity,
+    location: location
+  )
+  return IntervalStep(purpose, step: step)
 }

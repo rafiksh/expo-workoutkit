@@ -26,9 +26,13 @@ final class WatchLink: NSObject {
   private(set) var lastSnapshot: String?
 
   var onSnapshot: ((String) -> Void)?
-  var onMirror: ((Bool) -> Void)?
+  /// (mirroring, ended): `ended` is true when the watch ended the workout
+  /// itself, false when the link dropped and the workout carries on there.
+  var onMirror: ((Bool, Bool) -> Void)?
   var onFinished: (() -> Void)?
   var onPermissions: (([String: Any]) -> Void)?
+  /// The watch asked for the plan (first launch, or its copy went stale).
+  var onPlanWanted: (() -> Void)?
 
   private let queue = DispatchQueue(label: "co.paceo.watchlink")
 
@@ -81,10 +85,31 @@ final class WatchLink: NSObject {
 
   // MARK: out
 
-  /// Replaces the watch's plan cache. Latest wins, delivered when the watch wakes.
+  /// Replaces the watch's plan cache. Latest wins, delivered when the watch
+  /// wakes. Kept on disk too, so a watch asking for it gets an answer even
+  /// when the phone was woken in the background with no JS running.
   func sendPlan(_ json: String) throws {
+    let data = Data(json.utf8)
+    try? data.write(to: planURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     guard WCSession.default.activationState == .activated, WCSession.default.isPaired else { return }
-    try WCSession.default.updateApplicationContext(["plan": Data(json.utf8)])
+    try WCSession.default.updateApplicationContext(["plan": data])
+  }
+
+  private var planURL: URL {
+    let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir.appendingPathComponent("paceo-watch-plan.json")
+  }
+
+  /// What the watch is doing right now, asked directly: the logKey of the
+  /// workout it's running, or "" when it's running none. nil when the
+  /// watch can't be reached, so the caller knows it doesn't know.
+  func askWatchState(_ completion: @escaping (String?) -> Void) {
+    let s = WCSession.default
+    guard WCSession.isSupported(), s.activationState == .activated, s.isReachable else { return completion(nil) }
+    s.sendMessage(["state": true], replyHandler: { reply in
+      completion(reply["active"] as? String ?? "")
+    }, errorHandler: { _ in completion(nil) })
   }
 
   /// A downsized exercise photo, keyed by exercise (exerciseId ?? name).
@@ -226,16 +251,17 @@ final class WatchLink: NSObject {
   private func adoptMirror(_ session: HKWorkoutSession) {
     mirrored = session
     session.delegate = self
-    onMirror?(true)
+    onMirror?(true, false)
     // Ask for the current state rather than waiting for the next change.
     if let data = try? JSONSerialization.data(withJSONObject: ["hello": true]) {
       session.sendToRemoteWorkoutSession(data: data) { _, _ in }
     }
   }
 
-  private func endMirror() {
+  private func endMirror(ended: Bool) {
+    guard mirrored != nil else { return }
     mirrored = nil
-    onMirror?(false)
+    onMirror?(false, ended)
   }
 }
 
@@ -252,19 +278,32 @@ extension WatchLink: WCSessionDelegate {
   func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
     if let p = context["permissions"] as? [String: Any] { onPermissions?(p) }
   }
+
+  /// The watch asking for the plan: answered from disk at once (this can be
+  /// a background launch with no JS yet), and JS rebuilds a fresh one if
+  /// it's running, which lands as a new application context.
+  func session(
+    _ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void
+  ) {
+    guard message["needPlan"] != nil else { return replyHandler([:]) }
+    if let data = try? Data(contentsOf: planURL) { replyHandler(["plan": data]) } else { replyHandler([:]) }
+    onPlanWanted?()
+  }
 }
 
 extension WatchLink: HKWorkoutSessionDelegate {
   func workoutSession(
     _ s: HKWorkoutSession, didChangeTo to: HKWorkoutSessionState, from: HKWorkoutSessionState, date: Date
   ) {
-    if to == .ended || to == .stopped { endMirror() }
+    // The watch ended (or stopped, on its way to ending) the workout: it's
+    // over there, not just out of reach.
+    if to == .ended || to == .stopped { endMirror(ended: true) }
   }
 
   func workoutSession(_ s: HKWorkoutSession, didFailWithError error: Error) {}
 
   func workoutSession(_ s: HKWorkoutSession, didDisconnectFromRemoteDeviceWithError error: Error?) {
-    endMirror()
+    endMirror(ended: false)
   }
 
   func workoutSession(_ s: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {

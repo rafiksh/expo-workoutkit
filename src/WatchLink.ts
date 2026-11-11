@@ -36,9 +36,12 @@ export type WatchPermissions = {
 
 type WatchLinkEvents = {
   onWatchSnapshot: (e: { json: string }) => void;
-  onWatchMirror: (e: { active: boolean }) => void;
+  /** `ended`: the watch ended the workout itself (not just out of reach). Absent on older binaries. */
+  onWatchMirror: (e: { active: boolean; ended?: boolean }) => void;
   onWatchFinished: () => void;
   onWatchPermissions: (p: WatchPermissions) => void;
+  /** The watch asked for the plan: send a fresh one. */
+  onWatchPlanWanted: () => void;
 };
 
 type WatchLinkNative = {
@@ -54,6 +57,11 @@ type WatchLinkNative = {
   ackFinished(logKey: string): void;
   /** Asks the watch afresh when it's in reach, else its last report; null before it ever reported. */
   checkPermissions(): Promise<WatchPermissions | null>;
+  /**
+   * What the watch is running, asked directly: the workout's logKey, "" for
+   * none, null when it can't be reached. Absent on binaries before it.
+   */
+  getWatchState?(): Promise<string | null>;
   addListener<E extends keyof WatchLinkEvents>(event: E, listener: WatchLinkEvents[E]): EventSubscription;
 };
 

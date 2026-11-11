@@ -6,14 +6,17 @@ public class ExpoWatchLinkModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoWatchLink")
 
-    Events("onWatchSnapshot", "onWatchMirror", "onWatchFinished", "onWatchPermissions")
+    Events("onWatchSnapshot", "onWatchMirror", "onWatchFinished", "onWatchPermissions", "onWatchPlanWanted")
 
     OnCreate {
       let link = WatchLink.shared
       link.onSnapshot = { [weak self] json in self?.sendEvent("onWatchSnapshot", ["json": json]) }
-      link.onMirror = { [weak self] active in self?.sendEvent("onWatchMirror", ["active": active]) }
+      link.onMirror = { [weak self] active, ended in
+        self?.sendEvent("onWatchMirror", ["active": active, "ended": ended])
+      }
       link.onFinished = { [weak self] in self?.sendEvent("onWatchFinished", [:]) }
       link.onPermissions = { [weak self] p in self?.sendEvent("onWatchPermissions", p) }
+      link.onPlanWanted = { [weak self] in self?.sendEvent("onWatchPlanWanted", [:]) }
     }
 
     OnDestroy {
@@ -21,6 +24,7 @@ public class ExpoWatchLinkModule: Module {
       WatchLink.shared.onMirror = nil
       WatchLink.shared.onFinished = nil
       WatchLink.shared.onPermissions = nil
+      WatchLink.shared.onPlanWanted = nil
     }
 
     Function("getStatus") { () -> [String: Any] in
@@ -59,6 +63,11 @@ public class ExpoWatchLinkModule: Module {
     /// What the watch may do: asked afresh in reach, else its last report; null before any.
     AsyncFunction("checkPermissions") { (promise: Promise) in
       WatchLink.shared.checkPermissions { promise.resolve($0) }
+    }
+
+    /// The logKey of the workout the watch is running, "" for none, null when out of reach.
+    AsyncFunction("getWatchState") { (promise: Promise) in
+      WatchLink.shared.askWatchState { promise.resolve($0) }
     }
   }
 }

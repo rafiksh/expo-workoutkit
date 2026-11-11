@@ -6,7 +6,11 @@
   "apple": {
     "modules": [
       "ExpoWorkoutkitModule",
-      "ExpoRunRecorderModule"
+      "ExpoRunRecorderModule",
+      "ExpoWatchLinkModule"
+    ],
+    "appDelegateSubscribers": [
+      "WatchLinkAppDelegate"
     ]
   },
   "android": {

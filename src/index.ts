@@ -5,3 +5,4 @@ export { default as PreviewWorkoutButton } from "./ExpoWorkoutkitView";
 export * from "./ExpoWorkoutkit.types";
 export * from "./RunRecorder";
 export * from "./WorkoutNotification";
+export * from "./WatchLink";

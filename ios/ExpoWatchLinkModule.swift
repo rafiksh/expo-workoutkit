@@ -6,19 +6,21 @@ public class ExpoWatchLinkModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoWatchLink")
 
-    Events("onWatchSnapshot", "onWatchMirror", "onWatchFinished")
+    Events("onWatchSnapshot", "onWatchMirror", "onWatchFinished", "onWatchPermissions")
 
     OnCreate {
       let link = WatchLink.shared
       link.onSnapshot = { [weak self] json in self?.sendEvent("onWatchSnapshot", ["json": json]) }
       link.onMirror = { [weak self] active in self?.sendEvent("onWatchMirror", ["active": active]) }
       link.onFinished = { [weak self] in self?.sendEvent("onWatchFinished", [:]) }
+      link.onPermissions = { [weak self] p in self?.sendEvent("onWatchPermissions", p) }
     }
 
     OnDestroy {
       WatchLink.shared.onSnapshot = nil
       WatchLink.shared.onMirror = nil
       WatchLink.shared.onFinished = nil
+      WatchLink.shared.onPermissions = nil
     }
 
     Function("getStatus") { () -> [String: Any] in
@@ -52,6 +54,11 @@ public class ExpoWatchLinkModule: Module {
 
     Function("ackFinished") { (logKey: String) in
       WatchLink.shared.ack(logKey)
+    }
+
+    /// What the watch may do: asked afresh in reach, else its last report; null before any.
+    AsyncFunction("checkPermissions") { (promise: Promise) in
+      WatchLink.shared.checkPermissions { promise.resolve($0) }
     }
   }
 }

@@ -19,10 +19,26 @@ export type WatchStatus = {
 
 export type WatchFinished = { logKey: string; json: string };
 
+/** "restricted" arrives as "denied". */
+export type WatchPermission = "granted" | "denied" | "notAsked";
+
+/** What the Paceo watch app may do, as the watch last reported it. */
+export type WatchPermissions = {
+  /** Saving workouts to Health; also stands in for reading heart rate, which Apple hides. */
+  health: WatchPermission;
+  /** GPS for outdoor workouts. */
+  location: WatchPermission;
+  /** Fitness Tracking for the whole watch: "denied" means it's off. */
+  motion: WatchPermission;
+  /** Unix ms. */
+  checkedAt: number;
+};
+
 type WatchLinkEvents = {
   onWatchSnapshot: (e: { json: string }) => void;
   onWatchMirror: (e: { active: boolean }) => void;
   onWatchFinished: () => void;
+  onWatchPermissions: (p: WatchPermissions) => void;
 };
 
 type WatchLinkNative = {
@@ -36,6 +52,8 @@ type WatchLinkNative = {
   startOnWatch(json: string): Promise<boolean>;
   getPendingFinished(): WatchFinished[];
   ackFinished(logKey: string): void;
+  /** Asks the watch afresh when it's in reach, else its last report; null before it ever reported. */
+  checkPermissions(): Promise<WatchPermissions | null>;
   addListener<E extends keyof WatchLinkEvents>(event: E, listener: WatchLinkEvents[E]): EventSubscription;
 };
 

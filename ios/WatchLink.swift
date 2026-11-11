@@ -28,6 +28,7 @@ final class WatchLink: NSObject {
   var onSnapshot: ((String) -> Void)?
   var onMirror: ((Bool) -> Void)?
   var onFinished: (() -> Void)?
+  var onPermissions: (([String: Any]) -> Void)?
 
   private let queue = DispatchQueue(label: "co.paceo.watchlink")
 
@@ -56,6 +57,26 @@ final class WatchLink: NSObject {
       "reachable": active && s.isReachable,
       "mirroring": mirrored != nil,
     ]
+  }
+
+  /// What the watch last said it's allowed to do (Health, location, Fitness
+  /// Tracking), or nil before the Paceo watch app first reported.
+  var lastPermissions: [String: Any]? {
+    guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return nil }
+    return WCSession.default.receivedApplicationContext["permissions"] as? [String: Any]
+  }
+
+  /// Asks the watch afresh when it's in reach; otherwise its last report.
+  func checkPermissions(_ completion: @escaping ([String: Any]?) -> Void) {
+    let s = WCSession.default
+    guard WCSession.isSupported(), s.activationState == .activated, s.isReachable else {
+      return completion(lastPermissions)
+    }
+    s.sendMessage(["permissions": true], replyHandler: { reply in
+      completion(reply)
+    }, errorHandler: { [weak self] _ in
+      completion(self?.lastPermissions)
+    })
   }
 
   // MARK: out
@@ -226,6 +247,10 @@ extension WatchLink: WCSessionDelegate {
 
   func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
     receiveFinished(userInfo)
+  }
+
+  func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
+    if let p = context["permissions"] as? [String: Any] { onPermissions?(p) }
   }
 }
 

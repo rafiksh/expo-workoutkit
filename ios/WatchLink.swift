@@ -288,6 +288,13 @@ extension WatchLink: WCSessionDelegate {
   func session(
     _ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void
   ) {
+    // A finished workout sent live (the watch does this whenever the phone
+    // is in reach): into the inbox now, even from a background launch with
+    // no JS, and say so, so the watch can show "On your iPhone".
+    if message["finished"] != nil {
+      receiveFinished(message)
+      return replyHandler(["received": true])
+    }
     guard message["needPlan"] != nil else { return replyHandler([:]) }
     if let data = try? Data(contentsOf: planURL) { replyHandler(["plan": data]) } else { replyHandler([:]) }
     onPlanWanted?(message["missingPosters"] as? [String] ?? [])

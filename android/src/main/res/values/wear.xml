@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The phone side of the Paceo Wear OS link: the watch app finds this phone
+     by this capability (it declares paceo_watch_app in turn). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+  tools:keep="@array/android_wear_capabilities">
+  <string-array name="android_wear_capabilities" translatable="false">
+    <item>paceo_phone_app</item>
+  </string-array>
+</resources>

@@ -17,7 +17,8 @@
     "modules": [
       "expo.modules.workoutkit.ExpoWorkoutkitModule",
       "expo.modules.workoutkit.ExpoRunRecorderModule",
-      "expo.modules.workoutkit.ExpoWorkoutNotificationModule"
+      "expo.modules.workoutkit.ExpoWorkoutNotificationModule",
+      "expo.modules.workoutkit.ExpoWatchLinkModule"
     ]
   }
 }

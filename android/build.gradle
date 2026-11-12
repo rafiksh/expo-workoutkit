@@ -28,4 +28,8 @@ dependencies {
   implementation "androidx.health.connect:connect-client:1.1.0"
   implementation "androidx.core:core-ktx:1.13.1"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+  // The Wear OS link (ExpoWatchLink): Data Layer to the Paceo watch app,
+  // plus Task.await() for its calls.
+  implementation "com.google.android.gms:play-services-wearable:19.0.0"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1"
 }

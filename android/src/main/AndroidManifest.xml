@@ -61,5 +61,22 @@
         <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
       </intent-filter>
     </activity-alias>
+
+    <!-- The Wear OS link: wakes for the Paceo watch app's deliveries even
+         with the app closed, so a finished workout is never lost. -->
+    <service
+      android:name="expo.modules.workoutkit.WatchLinkListenerService"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+        <data android:scheme="wear" android:host="*" android:pathPrefix="/finished" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+        <data android:scheme="wear" android:host="*" android:pathPrefix="/snapshot" />
+        <data android:scheme="wear" android:host="*" android:pathPrefix="/mirror" />
+        <data android:scheme="wear" android:host="*" android:pathPrefix="/needPlan" />
+      </intent-filter>
+    </service>
   </application>
 </manifest>

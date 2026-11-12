@@ -16,7 +16,9 @@ public class ExpoWatchLinkModule: Module {
       }
       link.onFinished = { [weak self] in self?.sendEvent("onWatchFinished", [:]) }
       link.onPermissions = { [weak self] p in self?.sendEvent("onWatchPermissions", p) }
-      link.onPlanWanted = { [weak self] in self?.sendEvent("onWatchPlanWanted", [:]) }
+      link.onPlanWanted = { [weak self] missing in
+        self?.sendEvent("onWatchPlanWanted", ["missingPosters": missing])
+      }
     }
 
     OnDestroy {

@@ -31,8 +31,9 @@ final class WatchLink: NSObject {
   var onMirror: ((Bool, Bool) -> Void)?
   var onFinished: (() -> Void)?
   var onPermissions: (([String: Any]) -> Void)?
-  /// The watch asked for the plan (first launch, or its copy went stale).
-  var onPlanWanted: (() -> Void)?
+  /// The watch asked for the plan (first launch, or its copy went stale),
+  /// with the photo keys it's missing (a reinstall empties its cache).
+  var onPlanWanted: (([String]) -> Void)?
 
   private let queue = DispatchQueue(label: "co.paceo.watchlink")
 
@@ -114,7 +115,9 @@ final class WatchLink: NSObject {
 
   /// A downsized exercise photo, keyed by exercise (exerciseId ?? name).
   func sendPoster(fileUri: String, key: String) {
-    guard WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled,
+    // No isWatchAppInstalled check: it lags a fresh install, and a transfer
+    // to a watch without the app just never lands.
+    guard WCSession.default.activationState == .activated,
           let url = URL(string: fileUri) ?? Optional(URL(fileURLWithPath: fileUri)) else { return }
     WCSession.default.transferFile(url, metadata: ["posterKey": key])
   }
@@ -287,7 +290,7 @@ extension WatchLink: WCSessionDelegate {
   ) {
     guard message["needPlan"] != nil else { return replyHandler([:]) }
     if let data = try? Data(contentsOf: planURL) { replyHandler(["plan": data]) } else { replyHandler([:]) }
-    onPlanWanted?()
+    onPlanWanted?(message["missingPosters"] as? [String] ?? [])
   }
 }
 

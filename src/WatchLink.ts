@@ -40,8 +40,8 @@ type WatchLinkEvents = {
   onWatchMirror: (e: { active: boolean; ended?: boolean }) => void;
   onWatchFinished: () => void;
   onWatchPermissions: (p: WatchPermissions) => void;
-  /** The watch asked for the plan: send a fresh one. */
-  onWatchPlanWanted: () => void;
+  /** The watch asked for the plan: send a fresh one, and the photos it says it's missing. */
+  onWatchPlanWanted: (e: { missingPosters?: string[] }) => void;
 };
 
 type WatchLinkNative = {

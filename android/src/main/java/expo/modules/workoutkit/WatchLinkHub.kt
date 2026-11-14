@@ -39,7 +39,7 @@ internal object WatchLinkHub {
     fun onSnapshot(json: String)
     fun onMirror(active: Boolean, ended: Boolean)
     fun onFinished()
-    fun onPlanWanted(missingPosters: List<String>)
+    fun onPlanWanted(missingPosters: List<String>, current: Boolean)
   }
 
   @Volatile var listener: Listener? = null
@@ -82,9 +82,33 @@ internal object WatchLinkHub {
     listener?.onMirror(false, ended)
   }
 
-  fun planWanted(missingPosters: List<String>) {
-    listener?.onPlanWanted(missingPosters)
+  /**
+   * The watch asked for the plan, with the `sentAt` of the one it holds
+   * (absent from older watch apps). `current`: that is this phone's last
+   * plan, so only a week that changed since needs sending. The ask is kept
+   * until a plan answers it: the watch can ask with no JS running, and JS
+   * takes it once it is.
+   */
+  fun planWanted(context: Context, missingPosters: List<String>, have: Double?) {
+    val ours = prefs(context).getLong(PLAN_SENT_AT, 0L)
+    val current = have != null && ours > 0 && have >= ours
+    synchronized(lock) { wanted = missingPosters to current }
+    listener?.onPlanWanted(missingPosters, current)
   }
+
+  /** The watch's last ask if no plan has gone out since; taking it clears it. */
+  fun takePlanWanted(): Pair<List<String>, Boolean>? = synchronized(lock) { wanted.also { wanted = null } }
+
+  /** A plan went out: remember when it was built, and the ask (if any) is answered. */
+  fun planSent(context: Context, json: String) {
+    val sentAt = runCatching { JSONObject(json).optDouble("sentAt", 0.0).toLong() }.getOrDefault(0L)
+    prefs(context).edit().putLong(PLAN_SENT_AT, sentAt).apply()
+    synchronized(lock) { wanted = null }
+  }
+
+  private var wanted: Pair<List<String>, Boolean>? = null
+  private const val PLAN_SENT_AT = "planSentAt"
+  private fun prefs(context: Context) = context.getSharedPreferences("paceo-watch-link", Context.MODE_PRIVATE)
 
   // MARK: finished inbox
 

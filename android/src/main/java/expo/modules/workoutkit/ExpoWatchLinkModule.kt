@@ -53,8 +53,8 @@ class ExpoWatchLinkModule : Module() {
     override fun onMirror(active: Boolean, ended: Boolean) =
       sendEvent("onWatchMirror", mapOf("active" to active, "ended" to ended))
     override fun onFinished() = sendEvent("onWatchFinished", emptyMap<String, Any>())
-    override fun onPlanWanted(missingPosters: List<String>) =
-      sendEvent("onWatchPlanWanted", mapOf("missingPosters" to missingPosters))
+    override fun onPlanWanted(missingPosters: List<String>, current: Boolean) =
+      sendEvent("onWatchPlanWanted", mapOf("missingPosters" to missingPosters, "current" to current))
   }
 
   override fun definition() = ModuleDefinition {
@@ -114,6 +114,7 @@ class ExpoWatchLinkModule : Module() {
         try {
           val request = PutDataRequest.create(WatchLinkHub.PATH_PLAN).setData(bytes).setUrgent()
           Wearable.getDataClient(ctx).putDataItem(request).await()
+          WatchLinkHub.planSent(ctx, json)
           promise.resolve(null)
         } catch (e: ApiException) {
           // No Wear OS companion on this phone: nothing to send to, like iOS unpaired.
@@ -122,6 +123,12 @@ class ExpoWatchLinkModule : Module() {
           promise.reject("ERR_SEND_PLAN", e.message, e)
         }
       }
+    }
+
+    // The watch's last ask for the plan if none has gone out since (it can
+    // ask with no JS running); null otherwise. Taking it clears it.
+    Function("takePlanWanted") {
+      WatchLinkHub.takePlanWanted()?.let { (missing, current) -> mapOf("missingPosters" to missing, "current" to current) }
     }
 
     // A no-op on Wear OS: the watch app downloads exercise photos by URL

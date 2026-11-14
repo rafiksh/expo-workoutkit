@@ -31,9 +31,15 @@ final class WatchLink: NSObject {
   var onMirror: ((Bool, Bool) -> Void)?
   var onFinished: (() -> Void)?
   var onPermissions: (([String: Any]) -> Void)?
-  /// The watch asked for the plan (first launch, or its copy went stale),
-  /// with the photo keys it's missing (a reinstall empties its cache).
-  var onPlanWanted: (([String]) -> Void)?
+  /// The watch asked for the plan (it does each time its app comes to the
+  /// front), with the photo keys it's missing (a reinstall empties its
+  /// cache). `current`: it already holds the last plan this phone sent, so
+  /// only a week that changed since needs sending.
+  var onPlanWanted: (([String], Bool) -> Void)?
+  /// The last ask no plan has answered yet. A watch can ask before JS is up
+  /// (it wakes this app in the background), when the event above reaches no
+  /// one: JS takes it from here once it's running.
+  private var planWanted: [String: Any]?
 
   private let queue = DispatchQueue(label: "co.paceo.watchlink")
 
@@ -92,8 +98,39 @@ final class WatchLink: NSObject {
   func sendPlan(_ json: String) throws {
     let data = Data(json.utf8)
     try? data.write(to: planURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-    guard WCSession.default.activationState == .activated, WCSession.default.isPaired else { return }
+    queue.sync { planWanted = nil }
+    try deliverPlan(data)
+  }
+
+  /// The plan into the application context, if the link is up. When it
+  /// isn't yet (a plan built in the first moments of a launch, before the
+  /// session activated, or before a watch was paired), nothing is lost:
+  /// the copy on disk goes out as soon as it is (redeliverPlan).
+  private func deliverPlan(_ data: Data) throws {
+    guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isPaired else { return }
     try WCSession.default.updateApplicationContext(["plan": data])
+  }
+
+  /// The plan on disk, offered to the watch again. The system sends a
+  /// context only when it differs from the last one, so this costs nothing
+  /// when the watch already has it.
+  private func redeliverPlan() {
+    guard let data = try? Data(contentsOf: planURL) else { return }
+    try? deliverPlan(data)
+  }
+
+  /// When the plan on disk was built (its `sentAt`, Unix ms), 0 for none.
+  private func planSentAt(_ data: Data) -> Double {
+    ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["sentAt"] as? Double ?? 0
+  }
+
+  /// The watch's last ask, if no plan has gone out since: {missingPosters, current}.
+  func takePlanWanted() -> [String: Any]? {
+    queue.sync {
+      let wanted = planWanted
+      planWanted = nil
+      return wanted
+    }
   }
 
   private var planURL: URL {
@@ -269,8 +306,13 @@ final class WatchLink: NSObject {
 }
 
 extension WatchLink: WCSessionDelegate {
-  func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+  func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
+    // A plan handed over before the link was up is still only on disk.
+    if state == .activated { redeliverPlan() }
+  }
   func sessionDidBecomeInactive(_ session: WCSession) {}
+  /// A watch was paired, or the Paceo watch app installed: it gets the plan now.
+  func sessionWatchStateDidChange(_ session: WCSession) { redeliverPlan() }
   // Switching watches: activate again for the new one.
   func sessionDidDeactivate(_ session: WCSession) { WCSession.default.activate() }
 
@@ -282,9 +324,13 @@ extension WatchLink: WCSessionDelegate {
     if let p = context["permissions"] as? [String: Any] { onPermissions?(p) }
   }
 
-  /// The watch asking for the plan: answered from disk at once (this can be
-  /// a background launch with no JS yet), and JS rebuilds a fresh one if
-  /// it's running, which lands as a new application context.
+  /// The watch asking for the plan, with the `sentAt` of the one it holds:
+  /// answered from disk at once (this can be a background launch with no
+  /// JS yet). If it already holds this phone's last plan it's told so in a
+  /// few bytes; otherwise it gets the plan in the reply, or, when the plan
+  /// is too big for a reply (they cap near 64 KB), as a queued transfer
+  /// that can't be refused for its size. Either way JS is told, and sends
+  /// a fresh one if the week has changed.
   func session(
     _ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void
   ) {
@@ -296,8 +342,24 @@ extension WatchLink: WCSessionDelegate {
       return replyHandler(["received": true])
     }
     guard message["needPlan"] != nil else { return replyHandler([:]) }
-    if let data = try? Data(contentsOf: planURL) { replyHandler(["plan": data]) } else { replyHandler([:]) }
-    onPlanWanted?(message["missingPosters"] as? [String] ?? [])
+    var current = false
+    if let data = try? Data(contentsOf: planURL) {
+      let ours = planSentAt(data)
+      if let have = message["have"] as? Double, ours > 0, have >= ours {
+        current = true
+        replyHandler(["current": true])
+      } else if data.count <= 60_000 {
+        replyHandler(["plan": data])
+      } else {
+        session.transferUserInfo(["plan": data])
+        replyHandler(["planComing": true])
+      }
+    } else {
+      replyHandler([:])
+    }
+    let missing = message["missingPosters"] as? [String] ?? []
+    queue.sync { planWanted = ["missingPosters": missing, "current": current] }
+    onPlanWanted?(missing, current)
   }
 }
 

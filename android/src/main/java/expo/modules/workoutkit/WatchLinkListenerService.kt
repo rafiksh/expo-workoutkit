@@ -39,12 +39,14 @@ class WatchLinkListenerService : WearableListenerService() {
         if (!obj.optBoolean("active", false)) WatchLinkHub.endMirror(obj.optBoolean("ended", false))
       }
       WatchLinkHub.PATH_NEED_PLAN -> {
-        val arr = runCatching { JSONObject(text).optJSONArray("missingPosters") }.getOrNull()
+        val obj = runCatching { JSONObject(text) }.getOrNull()
+        val arr = obj?.optJSONArray("missingPosters")
         val missing = mutableListOf<String>()
         if (arr != null) for (i in 0 until arr.length()) arr.optString(i)?.takeIf { it.isNotEmpty() }?.let(missing::add)
         // The /plan DataItem already holds the last plan for the watch; JS
         // (when running) sends a fresh one.
-        WatchLinkHub.planWanted(missing)
+        val have = obj?.takeIf { it.has("have") }?.optDouble("have")?.takeIf { !it.isNaN() }
+        WatchLinkHub.planWanted(applicationContext, missing, have)
       }
     }
   }

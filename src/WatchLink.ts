@@ -34,20 +34,34 @@ export type WatchPermissions = {
   checkedAt: number;
 };
 
+export type WatchPlanWanted = { missingPosters?: string[]; current?: boolean };
+
 type WatchLinkEvents = {
   onWatchSnapshot: (e: { json: string }) => void;
   /** `ended`: the watch ended the workout itself (not just out of reach). Absent on older binaries. */
   onWatchMirror: (e: { active: boolean; ended?: boolean }) => void;
   onWatchFinished: () => void;
   onWatchPermissions: (p: WatchPermissions) => void;
-  /** The watch asked for the plan: send a fresh one, and the photos it says it's missing. */
-  onWatchPlanWanted: (e: { missingPosters?: string[] }) => void;
+  /**
+   * The watch asked for the plan (it does each time its app comes to the
+   * front): send a fresh one if the week changed, and the photos it says
+   * it's missing. `current`: it already holds the last plan this phone
+   * sent, so an unchanged week needs no resend. Absent on older binaries,
+   * where every ask is answered with a plan.
+   */
+  onWatchPlanWanted: (e: WatchPlanWanted) => void;
 };
 
 type WatchLinkNative = {
   getStatus(): WatchStatus;
   getMirroredSnapshot(): string | null;
   sendPlan(json: string): Promise<void>;
+  /**
+   * The watch's last ask for the plan if no plan has gone out since: it
+   * can ask before JS is listening (it wakes the app in the background).
+   * Taking it clears it. Absent on older binaries.
+   */
+  takePlanWanted?(): WatchPlanWanted | null;
   /** A downsized exercise still, keyed by exercise (exerciseId ?? name). */
   sendPoster(fileUri: string, key: string): void;
   sendCommand(json: string): boolean;

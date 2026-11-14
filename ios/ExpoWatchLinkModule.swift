@@ -16,8 +16,8 @@ public class ExpoWatchLinkModule: Module {
       }
       link.onFinished = { [weak self] in self?.sendEvent("onWatchFinished", [:]) }
       link.onPermissions = { [weak self] p in self?.sendEvent("onWatchPermissions", p) }
-      link.onPlanWanted = { [weak self] missing in
-        self?.sendEvent("onWatchPlanWanted", ["missingPosters": missing])
+      link.onPlanWanted = { [weak self] missing, current in
+        self?.sendEvent("onWatchPlanWanted", ["missingPosters": missing, "current": current])
       }
     }
 
@@ -40,6 +40,12 @@ public class ExpoWatchLinkModule: Module {
 
     AsyncFunction("sendPlan") { (json: String) in
       try WatchLink.shared.sendPlan(json)
+    }
+
+    /// The watch's last ask for the plan if none has gone out since (it can
+    /// ask before JS is listening); null otherwise. Taking it clears it.
+    Function("takePlanWanted") { () -> [String: Any]? in
+      WatchLink.shared.takePlanWanted()
     }
 
     Function("sendPoster") { (fileUri: String, key: String) in
